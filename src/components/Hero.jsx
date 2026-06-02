@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { ArrowRight, Star, GraduationCap } from 'lucide-react';
 import heroArt from '../assets/hero-art.png';
 
-export default function Hero() {
+export default function Hero({ setCurrentPage }) {
   // Framer Motion Animation Variants
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -73,19 +73,10 @@ export default function Hero() {
         {/* Description (Polished side-by-side horizontal split for visual rhythm variety) */}
         <motion.div 
           variants={itemVariants}
-          className="flex flex-col sm:flex-row gap-6 items-stretch max-w-2xl py-2 text-left"
+          className="max-w-2xl py-2 text-left"
         >
-          {/* Segment 1 */}
-          <p className="font-normal text-base text-on-surface-variant dark:text-slate-300 flex-1 leading-relaxed text-pretty">
+          <p className="font-normal text-base text-on-surface-variant dark:text-slate-300 leading-relaxed text-pretty">
             Join over 10 million learners to gain the skills needed for tomorrow's challenges.
-          </p>
-          
-          {/* Visual Divider (Only visible on sm screens and up, self-stretches) */}
-          <div className="w-full h-px sm:w-px bg-[#c7c4d8]/40 dark:bg-white/10 shrink-0 hidden sm:block" />
-          
-          {/* Segment 2 */}
-          <p className="font-normal text-base text-on-surface-variant/80 dark:text-slate-400 flex-1 leading-relaxed text-pretty">
-            High-impact learning designed specifically for modern professionals.
           </p>
         </motion.div>
 
@@ -94,15 +85,20 @@ export default function Hero() {
           variants={itemVariants}
           className="flex flex-col sm:flex-row gap-4 pt-4"
         >
-          <motion.a 
+          <motion.button 
             whileHover={{ scale: 1.02, y: -2 }}
             whileTap={{ scale: 0.98 }}
-            href="#courses" 
-            className="inline-flex justify-center items-center gap-2 font-semibold text-sm bg-primary hover:bg-primary-container text-white py-3.5 px-8 rounded-full shadow-md hover:shadow-lg transition-all duration-300 border-t border-white/20 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+            onClick={(e) => {
+              e.preventDefault();
+              if (setCurrentPage) {
+                setCurrentPage('marketplace');
+              }
+            }}
+            className="inline-flex justify-center items-center gap-2 font-semibold text-sm bg-primary hover:bg-primary-container text-white py-3.5 px-8 rounded-full shadow-md hover:shadow-lg transition-all duration-300 border-t border-white/20 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none cursor-pointer"
           >
             Explore Courses
             <ArrowRight className="w-4 h-4" />
-          </motion.a>
+          </motion.button>
           
           <motion.a 
             whileHover={{ scale: 1.02, bg: 'rgba(255,255,255,0.05)' }}

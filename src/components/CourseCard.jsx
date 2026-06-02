@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Star, Code, Palette, Cpu } from 'lucide-react';
+import { Star, Code, Palette, Cpu, Briefcase } from 'lucide-react';
 
 export default function CourseCard({ course }) {
   const cardRef = useRef(null);
@@ -48,15 +48,21 @@ export default function CourseCard({ course }) {
   const getIcon = (category) => {
     switch (category) {
       case 'Development':
+      case 'Web Development':
         return <Code className="w-12 h-12 text-white opacity-80" />;
       case 'Design':
+      case 'Design & UX':
         return <Palette className="w-12 h-12 text-white opacity-80" />;
       case 'AI & Data':
+      case 'AI & Machine Learning':
         return <Cpu className="w-12 h-12 text-white opacity-80" />;
+      case 'Business Strategy':
+        return <Briefcase className="w-12 h-12 text-white opacity-80" />;
       default:
         return <Code className="w-12 h-12 text-white opacity-80" />;
     }
   };
+
 
   return (
     <motion.div

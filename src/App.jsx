@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import Stats from './components/Stats';
 import BentoGrid from './components/BentoGrid';
 import Categories from './components/Categories';
 import Footer from './components/Footer';
+import Marketplace from './components/Marketplace';
 
 export default function App() {
   const [darkMode, setDarkMode] = useState(false);
+  const [currentPage, setCurrentPage] = useState('landing');
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Sync dark mode state with document class list
   useEffect(() => {
@@ -30,14 +34,44 @@ export default function App() {
 
       <div className="relative z-10 flex flex-col min-h-screen">
         {/* Header Navigation */}
-        <Navbar darkMode={darkMode} setDarkMode={setDarkMode} />
+        <Navbar 
+          darkMode={darkMode} 
+          setDarkMode={setDarkMode} 
+          currentPage={currentPage}
+          setCurrentPage={setCurrentPage}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+        />
         
         {/* Main Content Area */}
         <main className="flex-grow pt-28 pb-16 flex flex-col gap-6 md:gap-10">
-          <Hero />
-          <Stats />
-          <BentoGrid />
-          <Categories />
+          <AnimatePresence mode="wait">
+            {currentPage === 'landing' ? (
+              <motion.div
+                key="landing"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                className="flex flex-col gap-6 md:gap-10"
+              >
+                <Hero setCurrentPage={setCurrentPage} />
+                <Stats />
+                <BentoGrid />
+                <Categories setCurrentPage={setCurrentPage} setSearchQuery={setSearchQuery} />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="marketplace"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              >
+                <Marketplace searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </main>
         
         {/* Footer */}
@@ -46,3 +80,4 @@ export default function App() {
     </div>
   );
 }
+

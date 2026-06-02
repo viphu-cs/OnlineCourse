@@ -10,7 +10,7 @@ const CATEGORY_ITEMS = [
   { id: 5, name: "Marketing", icon: <Megaphone className="w-7 h-7" /> }
 ];
 
-export default function Categories() {
+export default function Categories({ setCurrentPage, setSearchQuery }) {
   const containerVariants = {
     hidden: {},
     visible: {
@@ -58,7 +58,20 @@ export default function Categories() {
             variants={itemVariants}
             whileHover={{ scale: 1.03, y: -4 }}
             whileTap={{ scale: 0.98 }}
-            href="#"
+            href="#courses"
+            onClick={(e) => {
+              e.preventDefault();
+              if (setCurrentPage && setSearchQuery) {
+                let query = item.name;
+                if (item.name === 'AI & Data') query = 'AI & Machine Learning';
+                if (item.name === 'Programming') query = 'Web Development';
+                if (item.name === 'Business') query = 'Business Strategy';
+                if (item.name === 'Design') query = 'Design & UX';
+                
+                setSearchQuery(query);
+                setCurrentPage('marketplace');
+              }
+            }}
             className="flex flex-col items-center justify-center p-6 md:p-8 bg-[#f8f9ff] dark:bg-[#0f172a] rounded-2xl border border-[#c7c4d8]/40 dark:border-white/5 level-2-shadow hover:border-primary dark:hover:border-primary-fixed/30 transition-colors duration-300 group focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
           >
             <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 text-primary dark:text-primary-fixed flex items-center justify-center mb-4 group-hover:bg-primary-fixed dark:group-hover:bg-primary/20 group-hover:scale-110 transition-all duration-300">
