@@ -44,7 +44,7 @@ export default function App() {
         />
         
         {/* Main Content Area */}
-        <main className="flex-grow pt-28 pb-16 flex flex-col gap-6 md:gap-10">
+        <main className="flex-grow pb-16 flex flex-col">
           <AnimatePresence mode="wait">
             {currentPage === 'landing' ? (
               <motion.div
@@ -53,12 +53,14 @@ export default function App() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -15 }}
                 transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                className="flex flex-col gap-6 md:gap-10"
+                className="flex flex-col"
               >
                 <Hero setCurrentPage={setCurrentPage} />
-                <Stats />
-                <BentoGrid />
-                <Categories setCurrentPage={setCurrentPage} setSearchQuery={setSearchQuery} />
+                <div className="flex flex-col gap-6 md:gap-10 pt-6 md:pt-10">
+                  <Stats />
+                  <BentoGrid />
+                  <Categories setCurrentPage={setCurrentPage} setSearchQuery={setSearchQuery} />
+                </div>
               </motion.div>
             ) : (
               <motion.div
@@ -67,6 +69,7 @@ export default function App() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -15 }}
                 transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                className="pt-28"
               >
                 <Marketplace searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
               </motion.div>
