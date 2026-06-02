@@ -66,7 +66,6 @@ export default function CourseCard({ course }) {
 
   return (
     <motion.div
-      layout
       ref={cardRef}
       onMouseMove={handleMouseMove}
       onMouseEnter={handleMouseEnter}

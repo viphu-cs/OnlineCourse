@@ -66,6 +66,10 @@
 }
 
 @layer base {
+  html {
+    scrollbar-gutter: stable;
+  }
+
   body {
     font-family: 'Inter', sans-serif;
     @apply bg-[#f8f9ff] text-[#0b1c30] antialiased overflow-x-hidden transition-colors duration-300;

@@ -488,11 +488,8 @@ export default function Marketplace({ searchQuery, setSearchQuery }) {
 
           {/* COURSE CARDS GRID */}
           {displayedCourses.length > 0 ? (
-            <motion.div 
-              layout 
-              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-gutter items-stretch"
-            >
-              <AnimatePresence mode="popLayout">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-gutter items-stretch">
+              <AnimatePresence>
                 {displayedCourses.map((course) => (
                   <motion.div
                     key={course.id}
@@ -507,7 +504,7 @@ export default function Marketplace({ searchQuery, setSearchQuery }) {
                   </motion.div>
                 ))}
               </AnimatePresence>
-            </motion.div>
+            </div>
           ) : (
             /* Empty State */
             <motion.div 

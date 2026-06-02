@@ -99,11 +99,8 @@ export default function BentoGrid() {
       </div>
 
       {/* Grid Container */}
-      <motion.div 
-        layout 
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter items-stretch"
-      >
-        <AnimatePresence mode="popLayout">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter items-stretch">
+        <AnimatePresence>
           {filteredCourses.map((course) => (
             <motion.div
               key={course.id}
@@ -118,7 +115,7 @@ export default function BentoGrid() {
             </motion.div>
           ))}
         </AnimatePresence>
-      </motion.div>
+      </div>
     </section>
   );
 }
