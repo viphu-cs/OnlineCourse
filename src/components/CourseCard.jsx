@@ -1,8 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Star, Code, Palette, Cpu, Briefcase } from 'lucide-react';
+import { Star, Code, Palette, Cpu, Briefcase, ShoppingCart, Check } from 'lucide-react';
 
-export default function CourseCard({ course }) {
+export default function CourseCard({ course, onSelectCourse, addToCart, cartItems = [], setCurrentPage }) {
+  const isEnrolled = localStorage.getItem(`skillelevate_progress_course_${course.id}`) !== null;
+  const isInCart = cartItems?.some(item => item.id === course.id);
   const cardRef = useRef(null);
   const [rotateX, setRotateX] = useState(0);
   const [rotateY, setRotateY] = useState(0);
@@ -70,6 +72,13 @@ export default function CourseCard({ course }) {
       onMouseMove={handleMouseMove}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onClick={() => onSelectCourse?.(course.id)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelectCourse?.(course.id);
+        }
+      }}
       style={{
         transformStyle: 'preserve-3d',
         transform: `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`,
@@ -125,6 +134,46 @@ export default function CourseCard({ course }) {
         <p className="text-sm text-on-surface-variant dark:text-slate-400 line-clamp-2 mb-4 flex-grow">
           {course.description}
         </p>
+
+        {/* Add to Cart button */}
+        <div className="mb-4">
+          <button
+            onClick={(e) => {
+              e.stopPropagation(); // Prevent card navigation to details
+              if (isEnrolled) {
+                onSelectCourse?.(course.id);
+              } else if (isInCart) {
+                setCurrentPage?.('cart');
+              } else {
+                addToCart?.(course);
+              }
+            }}
+            className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all active:scale-[0.97] cursor-pointer flex items-center justify-center gap-1.5 select-none ${
+              isEnrolled
+                ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25'
+                : isInCart
+                ? 'bg-primary text-white hover:opacity-90 border-t border-white/20 shadow-sm'
+                : 'bg-slate-900 dark:bg-slate-800 text-white hover:bg-slate-800 dark:hover:bg-slate-700 hover:shadow shadow-sm'
+            }`}
+          >
+            {isEnrolled ? (
+              <>
+                <Check className="w-3.5 h-3.5 stroke-[3]" />
+                <span>Enrolled • Learn Now</span>
+              </>
+            ) : isInCart ? (
+              <>
+                <ShoppingCart className="w-3.5 h-3.5" />
+                <span>Go to Cart</span>
+              </>
+            ) : (
+              <>
+                <ShoppingCart className="w-3.5 h-3.5" />
+                <span>Add to Cart</span>
+              </>
+            )}
+          </button>
+        </div>
 
         {/* Card Footer - Author & Rating */}
         <div className="flex items-center justify-between border-t border-[#c7c4d8]/30 dark:border-white/10 pt-4 mt-auto select-none">

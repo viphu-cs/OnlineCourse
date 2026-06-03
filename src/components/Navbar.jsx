@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Bolt, Search, Sun, Moon } from 'lucide-react';
+import { Bolt, Search, Sun, Moon, ShoppingCart } from 'lucide-react';
 
 export default function Navbar({ 
   darkMode, 
@@ -7,7 +7,8 @@ export default function Navbar({
   currentPage, 
   setCurrentPage, 
   searchQuery, 
-  setSearchQuery 
+  setSearchQuery,
+  cartItems = []
 }) {
   const searchInputRef = useRef(null);
   const [localSearch, setLocalSearch] = useState(searchQuery || '');
@@ -98,9 +99,42 @@ export default function Navbar({
             >
               Browse Courses
             </button>
+            <button 
+              onClick={() => setCurrentPage('dashboard')}
+              className={`transition-colors py-1 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded cursor-pointer ${
+                currentPage === 'dashboard'
+                  ? 'text-primary dark:text-primary-fixed font-bold border-b-2 border-primary dark:border-primary-fixed'
+                  : 'text-on-surface-variant dark:text-slate-300 hover:text-primary dark:hover:text-primary-fixed'
+              }`}
+            >
+              My Learning
+            </button>
           </div>
 
           <div className="flex items-center gap-sm">
+            {/* Instructor Studio button */}
+            <button 
+              onClick={() => setCurrentPage('course-builder')}
+              className="text-xs font-bold border border-[#c7c4d8]/40 dark:border-white/10 text-on-surface-variant dark:text-slate-300 px-3.5 py-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors active:scale-95 duration-200 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none cursor-pointer flex items-center gap-1.5"
+              aria-label="Instructor Studio"
+            >
+              <span>Instructor Studio</span>
+            </button>
+
+            {/* Shopping Cart button */}
+            <button 
+              onClick={() => setCurrentPage('cart')}
+              className="p-2.5 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[#0b1c30] dark:text-slate-300 transition-all active:scale-95 duration-200 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none cursor-pointer relative"
+              aria-label="View Shopping Cart"
+            >
+              <ShoppingCart className="w-5 h-5" />
+              {cartItems.length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold h-4 w-4 rounded-full flex items-center justify-center border border-white dark:border-[#0b1c30]">
+                  {cartItems.length}
+                </span>
+              )}
+            </button>
+
             {/* Dark Mode Toggle Button */}
             <button 
               onClick={() => setDarkMode(!darkMode)}
@@ -111,10 +145,16 @@ export default function Navbar({
             </button>
 
             {/* CTA Buttons */}
-            <button className="text-sm font-semibold text-on-surface-variant dark:text-slate-300 hover:text-primary dark:hover:text-primary-fixed transition-colors py-2 px-4 rounded active:scale-95 duration-200 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none cursor-pointer">
+            <button 
+              onClick={() => setCurrentPage('login')}
+              className="text-sm font-semibold text-on-surface-variant dark:text-slate-300 hover:text-primary dark:hover:text-primary-fixed transition-colors py-2 px-4 rounded active:scale-95 duration-200 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none cursor-pointer"
+            >
               Login
             </button>
-            <button className="text-sm font-semibold bg-primary hover:bg-primary-container text-white py-2 px-6 rounded-full shadow-sm transition-all hover:shadow-md active:scale-95 duration-200 border-t border-white/20 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none cursor-pointer">
+            <button 
+              onClick={() => setCurrentPage('signup')}
+              className="text-sm font-semibold bg-primary hover:bg-primary-container text-white py-2 px-6 rounded-full shadow-sm transition-all hover:shadow-md active:scale-95 duration-200 border-t border-white/20 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none cursor-pointer"
+            >
               Sign Up
             </button>
           </div>

@@ -2,207 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, ChevronDown, Filter, X, SlidersHorizontal, BookOpen, DollarSign, Award, Grid } from 'lucide-react';
 import CourseCard from './CourseCard';
-
-const COURSES_DATA = [
-  {
-    id: 1,
-    title: "Advanced React Patterns & Performance",
-    category: "Web Development",
-    price: "$89.99",
-    priceVal: 89.99,
-    rating: "4.9",
-    reviews: 2400,
-    author: "Sarah Drasner",
-    tag: "React 19",
-    duration: "12 hours",
-    difficulty: "Advanced",
-    dateAdded: "2026-05-15",
-    gradient: "from-indigo-600 to-emerald-600/75",
-    description: "Deep dive into advanced state management, custom renderers, Concurrent features, and React Server Components."
-  },
-  {
-    id: 2,
-    title: "Machine Learning Fundamentals",
-    category: "AI & Machine Learning",
-    price: "Free",
-    priceVal: 0,
-    rating: "4.8",
-    reviews: 15000,
-    author: "Andrew Ng",
-    tag: "AI/ML",
-    duration: "24 hours",
-    difficulty: "Beginner",
-    dateAdded: "2026-03-10",
-    gradient: "from-slate-900 to-indigo-950/80",
-    description: "Build a strong foundation in linear regression, classification, neural networks, and clustering with Python."
-  },
-  {
-    id: 3,
-    title: "Product Management 101",
-    category: "Business Strategy",
-    price: "$49.99",
-    priceVal: 49.99,
-    rating: "4.7",
-    reviews: 1200,
-    author: "Lenny Rachitsky",
-    tag: "Product",
-    duration: "8 hours",
-    difficulty: "Beginner",
-    dateAdded: "2026-04-20",
-    gradient: "from-amber-600 to-rose-700/60",
-    description: "Learn client discovery, write actionable PRDs, optimize engineering sprint cycles, and structure roadmaps."
-  },
-  {
-    id: 4,
-    title: "Modern UI/UX Design Systems",
-    category: "Design & UX",
-    price: "$79.99",
-    priceVal: 79.99,
-    rating: "4.9",
-    reviews: 3200,
-    author: "MDS",
-    tag: "Figma",
-    duration: "15 hours",
-    difficulty: "Intermediate",
-    dateAdded: "2026-05-01",
-    gradient: "from-pink-500 to-violet-650/80",
-    description: "Establish scalable UI libraries using variables, component properties, advanced auto-layout, and handoff guides."
-  },
-  {
-    id: 5,
-    title: "AI-Driven Product Design",
-    category: "AI & Machine Learning",
-    price: "$99.99",
-    priceVal: 99.99,
-    rating: "4.6",
-    reviews: 850,
-    author: "Dr. Elena Rostova",
-    tag: "AI Art",
-    duration: "10 hours",
-    difficulty: "Intermediate",
-    dateAdded: "2026-05-25",
-    gradient: "from-cyan-900 to-emerald-900/60",
-    description: "Create human-centered designs centered around generative LLMs, prompt interfaces, and dynamic layouts."
-  },
-  {
-    id: 6,
-    title: "Next.js 15 App Router Deep Dive",
-    category: "Web Development",
-    price: "$69.99",
-    priceVal: 69.99,
-    rating: "4.8",
-    reviews: 1950,
-    author: "Lee Robinson",
-    tag: "Next.js",
-    duration: "14 hours",
-    difficulty: "Intermediate",
-    dateAdded: "2026-05-29",
-    gradient: "from-neutral-800 to-slate-900/90",
-    description: "Master React Server Actions, routing lifecycles, full-scale static caching, and edge middleware optimization."
-  },
-  {
-    id: 7,
-    title: "Financial Modeling & Valuations",
-    category: "Business Strategy",
-    price: "$129.99",
-    priceVal: 129.99,
-    rating: "4.7",
-    reviews: 940,
-    author: "John Doe",
-    tag: "Finance",
-    duration: "18 hours",
-    difficulty: "Advanced",
-    dateAdded: "2026-02-15",
-    gradient: "from-emerald-700 to-teal-900/80",
-    description: "Develop professional three-statement operating models, DCF outputs, and merger analyses from scratch."
-  },
-  {
-    id: 8,
-    title: "Creative Coding with WebGL & Three.js",
-    category: "Design & UX",
-    price: "Free",
-    priceVal: 0,
-    rating: "4.9",
-    reviews: 1100,
-    author: "Yuri Artiukh",
-    tag: "WebGL",
-    duration: "20 hours",
-    difficulty: "Advanced",
-    dateAdded: "2026-05-10",
-    gradient: "from-purple-900 to-rose-900/70",
-    description: "Animate interactive 3D structures, customize vertex and fragment GLSL shaders, and optimize GPU processing."
-  },
-  {
-    id: 9,
-    title: "Data Structures & Algorithms in Go",
-    category: "Web Development",
-    price: "$59.99",
-    priceVal: 59.99,
-    rating: "4.5",
-    reviews: 720,
-    author: "Rob Pike",
-    tag: "GoLang",
-    duration: "16 hours",
-    difficulty: "Intermediate",
-    dateAdded: "2026-01-20",
-    gradient: "from-sky-700 to-indigo-900/80",
-    description: "Implement binary trees, graphs, sorting routines, dynamic programming, and complexity estimates in Go."
-  },
-  {
-    id: 10,
-    title: "Deep Learning Architectures",
-    category: "AI & Machine Learning",
-    price: "$149.99",
-    priceVal: 149.99,
-    rating: "5.0",
-    reviews: 4300,
-    author: "Geoff Hinton",
-    tag: "Deep Learning",
-    duration: "32 hours",
-    difficulty: "Advanced",
-    dateAdded: "2026-05-20",
-    gradient: "from-blue-900 to-indigo-950",
-    description: "Design convolutional neural nets, transformers, autoencoders, and training weights at scale."
-  },
-  {
-    id: 11,
-    title: "Designing for Growth & Scale",
-    category: "Design & UX",
-    price: "$59.99",
-    priceVal: 59.99,
-    rating: "4.8",
-    reviews: 1600,
-    author: "Julie Zhuo",
-    tag: "Growth UX",
-    duration: "9 hours",
-    difficulty: "Beginner",
-    dateAdded: "2026-05-02",
-    gradient: "from-violet-600 to-pink-700/60",
-    description: "Implement product experiments, onboarding flows, A/B feedback tests, and data-backed UX design."
-  },
-  {
-    id: 12,
-    title: "Executive Leadership Essentials",
-    category: "Business Strategy",
-    price: "Free",
-    priceVal: 0,
-    rating: "4.6",
-    reviews: 2100,
-    author: "Sheryl Sandberg",
-    tag: "Leadership",
-    duration: "6 hours",
-    difficulty: "Advanced",
-    dateAdded: "2026-02-28",
-    gradient: "from-teal-600 to-emerald-950/80",
-    description: "Build high-performing collaborative teams, manage global changes, and steer organizational culture."
-  }
-];
+import { COURSES_DATA } from '../data/coursesData';
 
 const CATEGORIES = ["AI & Machine Learning", "Web Development", "Business Strategy", "Design & UX"];
 const DIFFICULTIES = ["Beginner", "Intermediate", "Advanced"];
 const PRICE_RANGES = ["Free", "Paid"];
 
-export default function Marketplace({ searchQuery, setSearchQuery }) {
+export default function Marketplace({ searchQuery, setSearchQuery, onSelectCourse, addToCart, cartItems, setCurrentPage }) {
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedPriceRanges, setSelectedPriceRanges] = useState([]);
   const [selectedDifficulties, setSelectedDifficulties] = useState([]);
@@ -500,7 +306,13 @@ export default function Marketplace({ searchQuery, setSearchQuery }) {
                     transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
                     className="h-full"
                   >
-                    <CourseCard course={course} />
+                    <CourseCard 
+                      course={course} 
+                      onSelectCourse={onSelectCourse} 
+                      addToCart={addToCart} 
+                      cartItems={cartItems} 
+                      setCurrentPage={setCurrentPage} 
+                    />
                   </motion.div>
                 ))}
               </AnimatePresence>

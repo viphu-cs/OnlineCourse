@@ -1,54 +1,23 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import CourseCard from './CourseCard';
-
-const COURSES_DATA = [
-  {
-    id: 1,
-    title: "Full-Stack Web Development Bootcamp",
-    category: "Development",
-    price: "$89",
-    rating: "4.9",
-    reviews: "2.4k",
-    author: "Sarah Wong",
-    tag: "Bestseller",
-    gradient: "from-[#4f46e5] to-emerald-700/60",
-    description: "Master modern web technologies from frontend to backend. React, Node.js, and Postgres."
-  },
-  {
-    id: 2,
-    title: "Advanced UI/UX Systems Design",
-    category: "Design",
-    price: "$65",
-    rating: "4.8",
-    reviews: "1.8k",
-    author: "Marcus Doe",
-    tag: null,
-    gradient: "from-amber-600 to-[#ba1a1a]/50",
-    description: "Create scalable design systems and master Figma components for enterprise applications."
-  },
-  {
-    id: 3,
-    title: "Applied Machine Learning Models",
-    category: "AI & Data",
-    price: "$120",
-    rating: "5.0",
-    reviews: "900",
-    author: "Dr. Elena Rostova",
-    tag: "New",
-    gradient: "from-slate-900 to-[#4f46e5]/70",
-    description: "Practical guide to deploying LLMs and building AI-driven applications using Python."
-  }
-];
+import { COURSES_DATA } from '../data/coursesData';
 
 const CATEGORIES = ["All", "Development", "Design", "AI & Data"];
 
-export default function BentoGrid() {
+const CATEGORY_MAP = {
+  "Development": "Web Development",
+  "Design": "Design & UX",
+  "AI & Data": "AI & Machine Learning"
+};
+
+export default function BentoGrid({ onSelectCourse, addToCart, cartItems, setCurrentPage }) {
   const [activeCategory, setActiveCategory] = useState("All");
 
+  // Filter and show the first 3 matching courses for Bento view
   const filteredCourses = activeCategory === "All"
-    ? COURSES_DATA
-    : COURSES_DATA.filter(course => course.category === activeCategory);
+    ? COURSES_DATA.filter(c => [1, 2, 3].includes(c.id))
+    : COURSES_DATA.filter(course => course.category === CATEGORY_MAP[activeCategory]);
 
   return (
     <section id="courses" className="max-w-[1280px] mx-auto px-margin-mobile md:px-margin-desktop py-xl">
@@ -111,7 +80,13 @@ export default function BentoGrid() {
               transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
               className="h-full"
             >
-              <CourseCard course={course} />
+              <CourseCard 
+                course={course} 
+                onSelectCourse={onSelectCourse} 
+                addToCart={addToCart} 
+                cartItems={cartItems} 
+                setCurrentPage={setCurrentPage} 
+              />
             </motion.div>
           ))}
         </AnimatePresence>
