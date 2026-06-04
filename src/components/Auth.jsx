@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { School, ArrowLeft, Eye, EyeOff, Loader2, Mail, Lock, User } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
 export default function Auth({ initialMode = 'login', setCurrentPage }) {
   const [isLogin, setIsLogin] = useState(initialMode === 'login');
@@ -10,6 +11,7 @@ export default function Auth({ initialMode = 'login', setCurrentPage }) {
   const [name, setName] = useState('');
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [role, setRole] = useState('student');
   
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -26,10 +28,11 @@ export default function Auth({ initialMode = 'login', setCurrentPage }) {
     setName('');
     setAgreeTerms(false);
     setRememberMe(false);
+    setRole('student');
     setErrors({});
   }, [initialMode]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const newErrors = {};
 
@@ -51,13 +54,36 @@ export default function Auth({ initialMode = 'login', setCurrentPage }) {
     setErrors({});
     setIsSubmitting(true);
 
-    // Simulate authentication API call
-    setTimeout(() => {
+    try {
+      if (isLogin) {
+        // Sign In
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
+      } else {
+        // Sign Up
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: name,
+              role: role, // Signup role
+            },
+          },
+        });
+        if (error) throw error;
+      }
+
       setIsSubmitting(false);
-      // Mock login state inside application context
       setCurrentPage('dashboard');
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 1500);
+    } catch (err) {
+      setIsSubmitting(false);
+      setErrors({ general: err.message || 'An error occurred during authentication' });
+    }
   };
 
   return (
@@ -208,6 +234,45 @@ export default function Auth({ initialMode = 'login', setCurrentPage }) {
             {/* Form Submission */}
             <form onSubmit={handleSubmit} className="space-y-4">
               
+              {/* Role Toggle Selector (Sign Up Only) */}
+              <AnimatePresence initial={false}>
+                {!isLogin && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden pb-2"
+                  >
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 tracking-wide">I want to join as a</label>
+                    <div className="grid grid-cols-2 gap-2 bg-slate-50 dark:bg-slate-900 p-1 rounded-xl border border-[#c7c4d8]/40 dark:border-white/5">
+                      <button
+                        type="button"
+                        onClick={() => setRole('student')}
+                        className={`py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                          role === 'student'
+                            ? 'bg-primary text-white shadow-sm'
+                            : 'text-slate-500 hover:text-on-surface dark:hover:text-white'
+                        }`}
+                      >
+                        Student
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRole('instructor')}
+                        className={`py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                          role === 'instructor'
+                            ? 'bg-primary text-white shadow-sm'
+                            : 'text-slate-500 hover:text-on-surface dark:hover:text-white'
+                        }`}
+                      >
+                        Instructor
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* Full Name Input (Sign Up Only) */}
               <AnimatePresence initial={false}>
                 {!isLogin && (
@@ -356,6 +421,12 @@ export default function Auth({ initialMode = 'login', setCurrentPage }) {
                 )}
               </div>
               {!isLogin && errors.terms && <p className="text-[10px] text-red-500 font-bold mt-1">{errors.terms}</p>}
+
+              {errors.general && (
+                <div className="p-3 bg-red-500/10 border border-red-500/25 rounded-xl text-[11px] text-red-500 font-bold text-center">
+                  {errors.general}
+                </div>
+              )}
 
               {/* Form Submit Trigger */}
               <div className="pt-2">

@@ -3,11 +3,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Star, Users, Clock, ArrowLeft, Play, Pause, ChevronDown, ChevronUp, 
   Check, GraduationCap, Link2, Mail, Video, Download, Infinity, 
-  Tv, Award, X, Sparkles, CreditCard, Lock, Calendar, CheckCircle2, ShoppingCart 
+  Tv, Award, X, Sparkles, CreditCard, Lock, Calendar, CheckCircle2, ShoppingCart, Pencil
 } from 'lucide-react';
 
-export default function CourseDetails({ course, setCurrentPage, addToCart, cartItems = [], setSelectedCourseId }) {
-  const isEnrolled = localStorage.getItem(`skillelevate_progress_course_${course.id}`) !== null;
+export default function CourseDetails({ course, setCurrentPage, addToCart, cartItems = [], setSelectedCourseId, enrolledCourseIds = [], userProfile, onEditCourse }) {
+  const isInstructor = userProfile?.role === 'instructor' || userProfile?.role === 'admin';
+  const isOwnCourse = isInstructor && course?.authorId && userProfile?.id && String(course.authorId) === String(userProfile.id);
+  const isEnrolled = enrolledCourseIds.includes(course?.id) || localStorage.getItem(`skillelevate_progress_course_${course?.id}`) !== null;
   const isInCart = cartItems?.some(item => item.id === course.id);
   const [expandedChapters, setExpandedChapters] = useState({ 0: true }); // Chapter 1 expanded by default
   const [isPlayingVideo, setIsPlayingVideo] = useState(false);
@@ -480,7 +482,30 @@ export default function CourseDetails({ course, setCurrentPage, addToCart, cartI
 
               {/* Purchase Actions */}
               <div className="flex flex-col gap-3">
-                {isEnrolled ? (
+                {isInstructor ? (
+                  isOwnCourse ? (
+                    /* Edit Course button for instructor's own course */
+                    <button 
+                      onClick={() => {
+                        if (onEditCourse) {
+                          onEditCourse(course.id);
+                        } else {
+                          setSelectedCourseId?.(course.id);
+                          setCurrentPage('course-builder');
+                        }
+                      }}
+                      className="w-full py-3.5 bg-primary hover:bg-primary-container text-white font-bold rounded-xl shadow-sm hover:shadow-md transition-all active:scale-95 duration-200 border-t border-white/20 flex justify-center items-center gap-2 cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                    >
+                      <Pencil className="w-4 h-4" />
+                      <span>Edit Course</span>
+                    </button>
+                  ) : (
+                    /* View-only state for other instructors' courses */
+                    <div className="w-full py-3.5 rounded-xl text-sm font-bold flex justify-center items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 border border-slate-200 dark:border-slate-700 cursor-not-allowed select-none">
+                      <span>View Only — Instructors cannot purchase</span>
+                    </div>
+                  )
+                ) : isEnrolled ? (
                   <button 
                     onClick={() => {
                       setSelectedCourseId?.(course.id);

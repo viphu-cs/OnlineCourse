@@ -8,7 +8,7 @@ const CATEGORIES = ["AI & Machine Learning", "Web Development", "Business Strate
 const DIFFICULTIES = ["Beginner", "Intermediate", "Advanced"];
 const PRICE_RANGES = ["Free", "Paid"];
 
-export default function Marketplace({ searchQuery, setSearchQuery, onSelectCourse, addToCart, cartItems, setCurrentPage }) {
+export default function Marketplace({ courses = [], enrolledCourseIds = [], searchQuery, setSearchQuery, onSelectCourse, addToCart, cartItems, setCurrentPage, userProfile, onEditCourse }) {
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedPriceRanges, setSelectedPriceRanges] = useState([]);
   const [selectedDifficulties, setSelectedDifficulties] = useState([]);
@@ -59,8 +59,10 @@ export default function Marketplace({ searchQuery, setSearchQuery, onSelectCours
     setSearchQuery(e.target.value);
   };
 
+  const coursesToUse = courses && courses.length > 0 ? courses : COURSES_DATA;
+
   // Filter computation
-  const filteredCourses = COURSES_DATA.filter((course) => {
+  const filteredCourses = coursesToUse.filter((course) => {
     const matchesSearch = 
       searchQuery === '' ||
       course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -312,6 +314,9 @@ export default function Marketplace({ searchQuery, setSearchQuery, onSelectCours
                       addToCart={addToCart} 
                       cartItems={cartItems} 
                       setCurrentPage={setCurrentPage} 
+                      isEnrolled={enrolledCourseIds.includes(course.id)}
+                      userProfile={userProfile}
+                      onEditCourse={onEditCourse}
                     />
                   </motion.div>
                 ))}

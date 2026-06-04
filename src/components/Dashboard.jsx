@@ -1,83 +1,212 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
-  BookOpen, CheckCircle, Award, Clock, ArrowRight, Play, Flame, Download, Check
+  BookOpen, CheckCircle, Award, Clock, ArrowRight, Play, Flame, Download, Check, Loader2
 } from 'lucide-react';
-import { COURSES_DATA } from '../data/coursesData';
+import { supabase } from '../supabaseClient';
 
-export default function Dashboard({ setCurrentPage, setSelectedCourseId }) {
+const calculateStreak = (sessions) => {
+  if (!sessions || sessions.length === 0) return 0;
   
-  // Initialize mock progress for first load if not present
-  useEffect(() => {
-    // Demo course 2: Advanced UI/UX Systems Design (7 completed out of 9 lessons, approx 78%)
-    const key2 = `skillelevate_progress_course_2`;
-    if (!localStorage.getItem(key2)) {
-      localStorage.setItem(key2, JSON.stringify(["0-0", "0-1", "0-2", "1-0", "1-1", "1-2", "2-0"]));
+  // Extract unique session dates formatted as YYYY-MM-DD
+  const dates = sessions.map(s => s.session_date).sort((a, b) => new Date(b) - new Date(a));
+  
+  let streak = 0;
+  let currentDate = new Date();
+  currentDate.setHours(0,0,0,0);
+  
+  const todayStr = currentDate.toISOString().split('T')[0];
+  
+  const yesterday = new Date(currentDate);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split('T')[0];
+  
+  // Check if today or yesterday is studied
+  if (!dates.includes(todayStr) && !dates.includes(yesterdayStr)) {
+    return 0;
+  }
+  
+  let checkDate = dates.includes(todayStr) ? currentDate : yesterday;
+  while (true) {
+    const checkStr = checkDate.toISOString().split('T')[0];
+    if (dates.includes(checkStr)) {
+      streak++;
+      checkDate.setDate(checkDate.getDate() - 1);
+    } else {
+      break;
     }
-    // Demo course 1: Full-Stack Web Development Bootcamp (3 completed out of 9 lessons, approx 33%)
-    const key1 = `skillelevate_progress_course_1`;
-    if (!localStorage.getItem(key1)) {
-      localStorage.setItem(key1, JSON.stringify(["0-0", "0-1", "0-2"]));
-    }
-  }, []);
+  }
+  
+  return streak;
+};
 
-  // Compute enrolled, progress, completed statistics dynamically
+export default function Dashboard({ setCurrentPage, setSelectedCourseId, user, userProfile }) {
+  const [loading, setLoading] = useState(true);
   const [courseStats, setCourseStats] = useState([]);
   const [totals, setTotals] = useState({
     enrolledCount: 0,
     completedCount: 0,
     certificatesCount: 0,
-    learningHours: 142 // base baseline hours
+    learningHours: 0,
+    streakDays: 0
   });
 
+  const [activeTooltip, setActiveTooltip] = useState(null);
+  const [weeklyData, setWeeklyData] = useState([
+    { day: 'Mon', hours: 0 },
+    { day: 'Tue', hours: 0 },
+    { day: 'Wed', hours: 0 },
+    { day: 'Thu', hours: 0 },
+    { day: 'Fri', hours: 0 },
+    { day: 'Sat', hours: 0 },
+    { day: 'Sun', hours: 0 }
+  ]);
+
   useEffect(() => {
-    let enrolled = 0;
-    let completed = 0;
-    let certs = 0;
-    let extraHours = 0;
+    if (!user) return;
 
-    const stats = COURSES_DATA.map(course => {
-      const saved = localStorage.getItem(`skillelevate_progress_course_${course.id}`);
-      if (saved) {
-        const completedList = JSON.parse(saved);
-        const totalLessons = course.curriculum.reduce((acc, chap) => acc + chap.lessons.length, 0);
-        const percent = Math.round((completedList.length / totalLessons) * 100) || 0;
+    const loadDashboardData = async () => {
+      setLoading(true);
+      try {
+        // 1. Fetch enrollments with course details
+        const { data: enrollments, error: enrollError } = await supabase
+          .from('enrollments')
+          .select(`
+            status,
+            course_id,
+            courses (
+              *,
+              chapters (
+                id,
+                chapter_title,
+                duration,
+                order_index,
+                lessons (
+                  id,
+                  title,
+                  duration,
+                  order_index
+                )
+              )
+            )
+          `)
+          .eq('user_id', user.id);
+
+        if (enrollError) throw enrollError;
+
+        // 2. Fetch progress
+        const { data: progress, error: progressError } = await supabase
+          .from('user_progress')
+          .select('lesson_id')
+          .eq('user_id', user.id);
+
+        if (progressError) throw progressError;
+        const completedLessonIds = progress ? progress.map(p => p.lesson_id) : [];
+
+        // 3. Fetch study streak
+        const { data: sessions, error: sessionsError } = await supabase
+          .from('learning_sessions')
+          .select('*')
+          .eq('user_id', user.id);
+
+        if (sessionsError) throw sessionsError;
+
+        let enrolled = 0;
+        let completed = 0;
+        let certs = 0;
+
+        const stats = (enrollments || []).map(enroll => {
+          const course = enroll.courses;
+          if (!course) return null;
+
+          const allLessons = [];
+          const sortedChapters = (course.chapters || []).sort((a, b) => a.order_index - b.order_index);
+          sortedChapters.forEach(chap => {
+            const sortedLessons = (chap.lessons || []).sort((a, b) => a.order_index - b.order_index);
+            sortedLessons.forEach(les => {
+              allLessons.push(les);
+            });
+          });
+
+          const totalLessons = allLessons.length;
+          const completedInThisCourse = allLessons.filter(l => completedLessonIds.includes(l.id));
+          const percent = totalLessons > 0 ? Math.round((completedInThisCourse.length / totalLessons) * 100) : 0;
+
+          enrolled += 1;
+          if (percent === 100) {
+            completed += 1;
+            certs += 1;
+          }
+
+          // Resume Point
+          let lastChapterIdx = 0;
+          let lastLessonIdx = 0;
+          const activeChapter = localStorage.getItem(`skillelevate_active_chapter_${course.id}`);
+          const activeLesson = localStorage.getItem(`skillelevate_active_lesson_${course.id}`);
+          if (activeChapter) lastChapterIdx = parseInt(activeChapter, 10);
+          if (activeLesson) lastLessonIdx = parseInt(activeLesson, 10);
+
+          const currentLessonTitle = sortedChapters[lastChapterIdx]?.lessons[lastLessonIdx]?.title || allLessons[0]?.title || 'Introduction';
+
+          return {
+            id: course.id,
+            title: course.title,
+            category: course.category,
+            gradient: course.gradient || "from-[#4f46e5] to-emerald-700/60",
+            progressPercent: percent,
+            resumeTitle: currentLessonTitle,
+            curriculum: sortedChapters.map(chap => ({
+              chapterTitle: chap.chapter_title,
+              lessons: (chap.lessons || []).map(les => ({
+                id: les.id,
+                title: les.title
+              }))
+            }))
+          };
+        }).filter(Boolean);
+
+        const totalDurationSecs = sessions ? sessions.reduce((acc, s) => acc + s.duration_seconds, 0) : 0;
+        const totalHours = Math.round(totalDurationSecs / 3600);
+        const streak = calculateStreak(sessions);
+
+        // Map weekly hours (Mon - Sun)
+        const daysMap = { 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat', 0: 'Sun' };
+        const tempWeekly = { Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0, Sun: 0 };
         
-        enrolled += 1;
-        extraHours += completedList.length * 1.5; // assume average 1.5 hours per completed lesson
-        
-        if (percent === 100) {
-          completed += 1;
-          certs += 1;
-        }
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+        (sessions || []).forEach(s => {
+          const sDate = new Date(s.session_date);
+          if (sDate >= oneWeekAgo) {
+            const dayName = daysMap[sDate.getDay()];
+            tempWeekly[dayName] = tempWeekly[dayName] + Number((s.duration_seconds / 3600).toFixed(1));
+          }
+        });
 
-        // Get last active lesson title to display as "Resume point"
-        let lastChapterIdx = 0;
-        let lastLessonIdx = 0;
-        const activeChapter = localStorage.getItem(`skillelevate_active_chapter_${course.id}`);
-        const activeLesson = localStorage.getItem(`skillelevate_active_lesson_${course.id}`);
-        if (activeChapter) lastChapterIdx = parseInt(activeChapter, 10);
-        if (activeLesson) lastLessonIdx = parseInt(activeLesson, 10);
+        const finalWeekly = Object.keys(tempWeekly).map(day => ({
+          day,
+          hours: Number(tempWeekly[day].toFixed(1))
+        }));
 
-        const currentLessonTitle = course.curriculum[lastChapterIdx]?.lessons[lastLessonIdx]?.title || 'Introduction';
+        setCourseStats(stats);
+        setWeeklyData(finalWeekly);
+        setTotals({
+          enrolledCount: enrolled,
+          completedCount: completed,
+          certificatesCount: certs,
+          learningHours: totalHours,
+          streakDays: streak
+        });
 
-        return {
-          ...course,
-          progressPercent: percent,
-          resumeTitle: currentLessonTitle
-        };
+      } catch (err) {
+        console.error('Error loading dashboard stats:', err);
+      } finally {
+        setLoading(false);
       }
-      return null;
-    }).filter(Boolean);
+    };
 
-    setCourseStats(stats);
-    setTotals({
-      enrolledCount: enrolled,
-      completedCount: completed,
-      certificatesCount: certs,
-      learningHours: Math.round(142 + extraHours)
-    });
-  }, []);
+    loadDashboardData();
+  }, [user]);
 
   // Handler to resume learning course
   const handleResume = (courseId) => {
@@ -86,21 +215,10 @@ export default function Dashboard({ setCurrentPage, setSelectedCourseId }) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Static chart details
-  const [activeTooltip, setActiveTooltip] = useState(null);
-  const weeklyData = [
-    { day: 'Mon', hours: 2.5 },
-    { day: 'Tue', hours: 4.0 },
-    { day: 'Wed', hours: 6.2 },
-    { day: 'Thu', hours: 1.5 },
-    { day: 'Fri', hours: 4.8 },
-    { day: 'Sat', hours: 7.5 },
-    { day: 'Sun', hours: 3.2 }
-  ];
-
   // Printable mock certificate handler
   const handlePrintCertificate = (courseTitle) => {
     const printWindow = window.open('', '_blank');
+    const studentName = userProfile?.full_name || 'SkillElevate Learner';
     printWindow.document.write(`
       <html>
         <head>
@@ -136,7 +254,7 @@ export default function Dashboard({ setCurrentPage, setSelectedCourseId }) {
             <h2>Certificate of Completion</h2>
             <div class="seal">🎓</div>
             <p>This is proudly presented to</p>
-            <div class="name">Alex Carter</div>
+            <div class="name">${studentName}</div>
             <p>for successfully completing the course</p>
             <div class="course-name">${courseTitle}</div>
             <p class="desc">Demonstrating rigorous expertise, hours of practice, and mastery of all advanced curriculum standards delivered by SkillElevate.</p>
@@ -150,13 +268,44 @@ export default function Dashboard({ setCurrentPage, setSelectedCourseId }) {
     printWindow.document.close();
   };
 
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#f8f9ff] dark:bg-[#0b1c30] text-[#0b1c30] dark:text-[#f8f9ff] pt-32 pb-16 px-4 md:px-12 max-w-7xl mx-auto w-full flex flex-col items-center justify-center text-center">
+        <div className="bg-white dark:bg-slate-900 border border-[#c7c4d8]/40 dark:border-white/5 rounded-2xl p-8 max-w-md level-3-shadow flex flex-col items-center gap-6">
+          <BookOpen className="w-16 h-16 text-primary animate-pulse" />
+          <h1 className="font-display font-bold text-2xl text-on-surface dark:text-white">Track Your Progress</h1>
+          <p className="text-sm text-on-surface-variant dark:text-slate-400 font-medium">
+            Sign in to access your dashboard, resume your active lectures, view completions, and download official certificates.
+          </p>
+          <button 
+            onClick={() => setCurrentPage('login')}
+            className="w-full bg-primary hover:bg-primary-container text-white py-3 rounded-xl font-bold text-xs shadow-md transition-all active:scale-[0.98] cursor-pointer"
+          >
+            Sign In Now
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#f8f9ff] dark:bg-[#0b1c30] text-[#0b1c30] dark:text-[#f8f9ff] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-10 h-10 text-primary animate-spin" />
+          <p className="text-sm font-semibold text-slate-500">Loading student metrics...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#f8f9ff] dark:bg-[#0b1c30] text-[#0b1c30] dark:text-[#f8f9ff] pt-24 pb-16 px-4 md:px-12 max-w-7xl mx-auto w-full flex flex-col gap-10">
       
       {/* Header Info */}
       <header className="flex flex-col gap-1">
         <h1 className="font-display font-bold text-3xl md:text-5xl text-on-surface dark:text-white tracking-tight">
-          Welcome back, Alex.
+          Welcome back, {userProfile?.full_name?.split(' ')[0] || 'Learner'}.
         </h1>
         <p className="text-sm md:text-base text-on-surface-variant dark:text-slate-400 font-medium">
           Here's a summary of your learning progress and upcoming milestones.
@@ -389,7 +538,7 @@ export default function Dashboard({ setCurrentPage, setSelectedCourseId }) {
             <div className="bg-primary-container text-white rounded-2xl p-5 shadow flex items-center justify-between level-2-shadow select-none">
               <div>
                 <p className="text-xs font-bold opacity-80 uppercase tracking-widest">Study Streak</p>
-                <p className="font-display font-bold text-2xl md:text-3xl mt-1">14 Days</p>
+                <p className="font-display font-bold text-2xl md:text-3xl mt-1">{totals.streakDays} Days</p>
               </div>
               <div className="w-12 h-12 rounded-full bg-white/15 border border-white/10 flex items-center justify-center backdrop-blur-md">
                 <Flame className="w-6 h-6 text-yellow-400 fill-current animate-bounce" />

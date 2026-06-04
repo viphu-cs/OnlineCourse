@@ -8,10 +8,26 @@ export default function Navbar({
   setCurrentPage, 
   searchQuery, 
   setSearchQuery,
-  cartItems = []
+  cartItems = [],
+  session,
+  userProfile,
+  onLogout
 }) {
   const searchInputRef = useRef(null);
   const [localSearch, setLocalSearch] = useState(searchQuery || '');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const isInstructor = userProfile?.role === 'instructor' || userProfile?.role === 'admin';
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (dropdownOpen && !e.target.closest('.user-dropdown-container')) {
+        setDropdownOpen(false);
+      }
+    };
+    window.addEventListener('click', handleOutsideClick);
+    return () => window.removeEventListener('click', handleOutsideClick);
+  }, [dropdownOpen]);
 
   // Keep local search query in sync with global search query
   useEffect(() => {
@@ -75,6 +91,7 @@ export default function Navbar({
 
         {/* Links & Theme Toggle */}
         <div className="flex items-center gap-6 md:gap-gutter">
+
           <div className="hidden md:flex items-center gap-8 font-medium text-sm">
             <button 
               onClick={() => {
@@ -99,41 +116,47 @@ export default function Navbar({
             >
               Browse Courses
             </button>
-            <button 
-              onClick={() => setCurrentPage('dashboard')}
-              className={`transition-colors py-1 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded cursor-pointer ${
-                currentPage === 'dashboard'
-                  ? 'text-primary dark:text-primary-fixed font-bold border-b-2 border-primary dark:border-primary-fixed'
-                  : 'text-on-surface-variant dark:text-slate-300 hover:text-primary dark:hover:text-primary-fixed'
-              }`}
-            >
-              My Learning
-            </button>
+            {session && !isInstructor && (
+              <button 
+                onClick={() => setCurrentPage('dashboard')}
+                className={`transition-colors py-1 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded cursor-pointer ${
+                  currentPage === 'dashboard'
+                    ? 'text-primary dark:text-primary-fixed font-bold border-b-2 border-primary dark:border-primary-fixed'
+                    : 'text-on-surface-variant dark:text-slate-300 hover:text-primary dark:hover:text-primary-fixed'
+                }`}
+              >
+                My Learning
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-sm">
             {/* Instructor Studio button */}
-            <button 
-              onClick={() => setCurrentPage('course-builder')}
-              className="text-xs font-bold border border-[#c7c4d8]/40 dark:border-white/10 text-on-surface-variant dark:text-slate-300 px-3.5 py-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors active:scale-95 duration-200 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none cursor-pointer flex items-center gap-1.5"
-              aria-label="Instructor Studio"
-            >
-              <span>Instructor Studio</span>
-            </button>
+            {isInstructor && (
+              <button 
+                onClick={() => setCurrentPage('course-builder')}
+                className="text-xs font-bold border border-[#c7c4d8]/40 dark:border-white/10 text-on-surface-variant dark:text-slate-300 px-3.5 py-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors active:scale-95 duration-200 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none cursor-pointer flex items-center gap-1.5"
+                aria-label="Instructor Studio"
+              >
+                <span>Instructor Studio</span>
+              </button>
+            )}
 
-            {/* Shopping Cart button */}
-            <button 
-              onClick={() => setCurrentPage('cart')}
-              className="p-2.5 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[#0b1c30] dark:text-slate-300 transition-all active:scale-95 duration-200 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none cursor-pointer relative"
-              aria-label="View Shopping Cart"
-            >
-              <ShoppingCart className="w-5 h-5" />
-              {cartItems.length > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold h-4 w-4 rounded-full flex items-center justify-center border border-white dark:border-[#0b1c30]">
-                  {cartItems.length}
-                </span>
-              )}
-            </button>
+            {/* Shopping Cart button — hidden for instructors */}
+            {!isInstructor && (
+              <button 
+                onClick={() => setCurrentPage('cart')}
+                className="p-2.5 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[#0b1c30] dark:text-slate-300 transition-all active:scale-95 duration-200 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none cursor-pointer relative"
+                aria-label="View Shopping Cart"
+              >
+                <ShoppingCart className="w-5 h-5" />
+                {cartItems.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold h-4 w-4 rounded-full flex items-center justify-center border border-white dark:border-[#0b1c30]">
+                    {cartItems.length}
+                  </span>
+                )}
+              </button>
+            )}
 
             {/* Dark Mode Toggle Button */}
             <button 
@@ -144,19 +167,67 @@ export default function Navbar({
               {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
 
-            {/* CTA Buttons */}
-            <button 
-              onClick={() => setCurrentPage('login')}
-              className="text-sm font-semibold text-on-surface-variant dark:text-slate-300 hover:text-primary dark:hover:text-primary-fixed transition-colors py-2 px-4 rounded active:scale-95 duration-200 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none cursor-pointer"
-            >
-              Login
-            </button>
-            <button 
-              onClick={() => setCurrentPage('signup')}
-              className="text-sm font-semibold bg-primary hover:bg-primary-container text-white py-2 px-6 rounded-full shadow-sm transition-all hover:shadow-md active:scale-95 duration-200 border-t border-white/20 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none cursor-pointer"
-            >
-              Sign Up
-            </button>
+            {/* CTA Buttons / User Session Profile dropdown */}
+            {session ? (
+              <div className="relative user-dropdown-container">
+                <button 
+                  onClick={() => setDropdownOpen(!dropdownOpen)}
+                  className="w-10 h-10 rounded-full border border-[#c7c4d8]/40 dark:border-white/10 overflow-hidden cursor-pointer active:scale-95 duration-200 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                >
+                  <img 
+                    src={userProfile?.avatar_url || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80"} 
+                    alt="User Avatar" 
+                    className="w-full h-full object-cover"
+                  />
+                </button>
+                {dropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 border border-[#c7c4d8]/40 dark:border-white/10 rounded-xl shadow-lg py-2 z-50 text-left text-xs font-semibold text-on-surface dark:text-slate-200">
+                    <div className="px-4 py-2 border-b border-[#c7c4d8]/20 dark:border-white/5">
+                      <p className="font-bold truncate text-slate-800 dark:text-white">{userProfile?.full_name || 'Learner'}</p>
+                      <p className="text-[10px] text-slate-400 truncate">{userProfile?.email}</p>
+                      <span className="text-[9px] bg-primary/10 text-primary dark:bg-primary-fixed-dim/10 dark:text-primary-fixed-dim rounded px-1.5 py-0.5 mt-1 inline-block uppercase tracking-wider font-bold">{userProfile?.role || 'student'}</span>
+                    </div>
+                    {!isInstructor && (
+                      <button 
+                        onClick={() => { setDropdownOpen(false); setCurrentPage('dashboard'); }}
+                        className="w-full text-left px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer text-slate-800 dark:text-slate-200"
+                      >
+                        My Learning
+                      </button>
+                    )}
+                    {isInstructor && (
+                      <button 
+                        onClick={() => { setDropdownOpen(false); setCurrentPage('course-builder'); }}
+                        className="w-full text-left px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer text-slate-800 dark:text-slate-200"
+                      >
+                        Instructor Studio
+                      </button>
+                    )}
+                    <button 
+                      onClick={() => { setDropdownOpen(false); onLogout(); }}
+                      className="w-full text-left px-4 py-2 hover:bg-red-50 dark:hover:bg-red-950/20 text-red-500 transition-colors border-t border-[#c7c4d8]/20 dark:border-white/5 cursor-pointer font-bold"
+                    >
+                      Log Out
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <button 
+                  onClick={() => setCurrentPage('login')}
+                  className="text-sm font-semibold text-on-surface-variant dark:text-slate-300 hover:text-primary dark:hover:text-primary-fixed transition-colors py-2 px-4 rounded active:scale-95 duration-200 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none cursor-pointer"
+                >
+                  Login
+                </button>
+                <button 
+                  onClick={() => setCurrentPage('signup')}
+                  className="text-sm font-semibold bg-primary hover:bg-primary-container text-white py-2 px-6 rounded-full shadow-sm transition-all hover:shadow-md active:scale-95 duration-200 border-t border-white/20 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none cursor-pointer"
+                >
+                  Sign Up
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

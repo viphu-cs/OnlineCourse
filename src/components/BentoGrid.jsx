@@ -11,13 +11,15 @@ const CATEGORY_MAP = {
   "AI & Data": "AI & Machine Learning"
 };
 
-export default function BentoGrid({ onSelectCourse, addToCart, cartItems, setCurrentPage }) {
+export default function BentoGrid({ courses = [], enrolledCourseIds = [], onSelectCourse, addToCart, cartItems, setCurrentPage, userProfile, onEditCourse }) {
   const [activeCategory, setActiveCategory] = useState("All");
+
+  const coursesToUse = courses && courses.length > 0 ? courses : COURSES_DATA;
 
   // Filter and show the first 3 matching courses for Bento view
   const filteredCourses = activeCategory === "All"
-    ? COURSES_DATA.filter(c => [1, 2, 3].includes(c.id))
-    : COURSES_DATA.filter(course => course.category === CATEGORY_MAP[activeCategory]);
+    ? coursesToUse.slice(0, 3)
+    : coursesToUse.filter(course => course.category === CATEGORY_MAP[activeCategory]);
 
   return (
     <section id="courses" className="max-w-[1280px] mx-auto px-margin-mobile md:px-margin-desktop py-xl">
@@ -86,6 +88,9 @@ export default function BentoGrid({ onSelectCourse, addToCart, cartItems, setCur
                 addToCart={addToCart} 
                 cartItems={cartItems} 
                 setCurrentPage={setCurrentPage} 
+                isEnrolled={enrolledCourseIds.includes(course.id)}
+                userProfile={userProfile}
+                onEditCourse={onEditCourse}
               />
             </motion.div>
           ))}

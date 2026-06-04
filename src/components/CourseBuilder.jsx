@@ -6,12 +6,16 @@ import {
   Eye, Check, ArrowLeft, ArrowUpRight, CheckCircle, Video, List, Link as LinkIcon,
   Users, DollarSign, Star, BookOpen, Sparkles, AlertCircle
 } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
 export default function CourseBuilder({ 
   courses, 
   setCourses, 
   setCurrentPage, 
-  setSelectedCourseId 
+  setSelectedCourseId,
+  user,
+  userProfile,
+  fetchCourses
 }) {
   // Creator-specific states
   const [editingCourseId, setEditingCourseId] = useState(null);
@@ -21,7 +25,7 @@ export default function CourseBuilder({
   const [activeLessonIdx, setActiveLessonIdx] = useState(0);
 
   // Active course reference
-  const course = courses.find(c => c.id === editingCourseId);
+  const course = courses.find(c => String(c.id) === String(editingCourseId));
 
   // Status state
   const [isPublished, setIsPublished] = useState(false);
@@ -30,8 +34,8 @@ export default function CourseBuilder({
   const [mediaList, setMediaList] = useState([]);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
 
-  // Filter courses owned by the user (Alex Carter)
-  const myCourses = courses.filter(c => c.author === "Alex Carter");
+  // Filter courses owned by the user or all if admin
+  const myCourses = courses.filter(c => c.authorId === user?.id || userProfile?.role === 'admin');
 
   // Sync editor fields on active lesson change
   useEffect(() => {
@@ -49,239 +53,290 @@ export default function CourseBuilder({
     }
   }, [activeChapterIdx, activeLessonIdx, editingCourseId]);
 
-  // Inject a default template course if Alex Carter has no courses yet, ensuring the page looks premium and populated on first launch
-  useEffect(() => {
-    if (myCourses.length === 0) {
-      const templateCourse = {
-        id: 101,
-        title: "Next.js 14 Developer Blueprint",
-        category: "Web Development",
-        price: "$49.99",
-        priceVal: 49.99,
-        rating: "5.0",
-        reviews: 0,
-        author: "Alex Carter",
-        authorRole: "Senior Tech Educator",
-        authorBio: "Expert professional developer.",
-        tag: "Draft",
-        duration: "8 hours",
-        difficulty: "Intermediate",
-        gradient: "from-[#4f46e5] to-emerald-700/60",
-        description: "Learn server actions, routing, rendering modes, and advanced Next.js features.",
-        objectives: [
-          "Master Next.js App Router and server side actions",
-          "Build scalable production applications with PostgreSQL backing",
-          "Implement responsive styled frameworks and layouts"
-        ],
-        requirements: [
-          "Intermediate knowledge of React.js and modern JavaScript principles."
-        ],
-        curriculum: [
-          {
-            chapterTitle: "Chapter 1: Routing & Rendering",
-            duration: "30 mins",
-            lessons: [
-              { title: "Introduction to Server Actions", duration: "10:00", content: "Learn how to use server-side mutations with form actions directly..." },
-              { title: "Static vs Dynamic Rendering Modes", duration: "20:00", content: "Optimize page generation speed using static caching mechanisms..." }
-            ]
-          }
-        ]
-      };
-      const updated = [...courses, templateCourse];
-      setCourses(updated);
-      localStorage.setItem('skillelevate_courses', JSON.stringify(updated));
-    }
-  }, []);
-
   // Add Chapter handler
-  const handleAddChapter = () => {
+  const handleAddChapter = async () => {
     if (!course) return;
     const title = prompt("Enter Chapter Title:");
     if (!title) return;
 
-    const newChapter = {
-      chapterTitle: `Chapter ${course.curriculum.length + 1}: ${title}`,
-      duration: "0 mins",
-      lessons: [
-        { title: "Introduction Lecture", duration: "10:00", content: "Welcome to this new lecture. Start typing content..." }
-      ]
-    };
+    try {
+      const orderIdx = course.curriculum.length;
+      // 1. Insert chapter
+      const { data: newChapter, error: chapterError } = await supabase
+        .from('chapters')
+        .insert({
+          course_id: course.id,
+          chapter_title: `Chapter ${orderIdx + 1}: ${title}`,
+          duration: "10 mins",
+          order_index: orderIdx
+        })
+        .select()
+        .single();
 
-    const updatedCurriculum = [...course.curriculum, newChapter];
-    updateCourseCurriculum(updatedCurriculum);
-    setActiveChapterIdx(course.curriculum.length); // go to new chapter
-    setActiveLessonIdx(0);
+      if (chapterError) throw chapterError;
+
+      // 2. Insert default lesson
+      const { error: lessonError } = await supabase
+        .from('lessons')
+        .insert({
+          chapter_id: newChapter.id,
+          title: "Introduction Lecture",
+          duration: "10:00",
+          content: "Welcome to this new lecture. Start typing content...",
+          order_index: 0
+        });
+
+      if (lessonError) throw lessonError;
+
+      await fetchCourses();
+      setActiveChapterIdx(orderIdx);
+      setActiveLessonIdx(0);
+    } catch (err) {
+      console.error("Error adding chapter:", err);
+      alert("Error adding chapter: " + err.message);
+    }
   };
 
   // Add Lesson handler
-  const handleAddLesson = (cIdx) => {
+  const handleAddLesson = async (cIdx) => {
     if (!course) return;
+    const chapter = course.curriculum[cIdx];
+    if (!chapter) return;
+
     const title = prompt("Enter Lesson Title:");
     if (!title) return;
 
-    const newLesson = {
-      title,
-      duration: "10:00",
-      content: "Start typing content for this lesson here..."
-    };
+    try {
+      const orderIdx = chapter.lessons.length;
+      const { error } = await supabase
+        .from('lessons')
+        .insert({
+          chapter_id: chapter.id,
+          title,
+          duration: "10:00",
+          content: "Start typing content for this lesson here...",
+          order_index: orderIdx
+        });
 
-    const updatedCurriculum = [...course.curriculum];
-    updatedCurriculum[cIdx].lessons.push(newLesson);
-    updateCourseCurriculum(updatedCurriculum);
-    
-    // Set active lesson to new one
-    setActiveChapterIdx(cIdx);
-    setActiveLessonIdx(updatedCurriculum[cIdx].lessons.length - 1);
+      if (error) throw error;
+
+      await fetchCourses();
+      setActiveChapterIdx(cIdx);
+      setActiveLessonIdx(orderIdx);
+    } catch (err) {
+      console.error("Error adding lesson:", err);
+      alert("Error: " + err.message);
+    }
   };
 
   // Delete Lesson handler
-  const handleDeleteLesson = (cIdx, lIdx) => {
+  const handleDeleteLesson = async (cIdx, lIdx) => {
     if (!course) return;
-    if (course.curriculum[cIdx].lessons.length <= 1) {
+    const chapter = course.curriculum[cIdx];
+    if (!chapter) return;
+
+    if (chapter.lessons.length <= 1) {
       alert("Each chapter must have at least one lesson.");
       return;
     }
 
+    const lesson = chapter.lessons[lIdx];
+    if (!lesson) return;
+
     if (!confirm("Are you sure you want to delete this lesson?")) return;
 
-    const updatedCurriculum = [...course.curriculum];
-    updatedCurriculum[cIdx].lessons.splice(lIdx, 1);
-    updateCourseCurriculum(updatedCurriculum);
+    try {
+      const { error } = await supabase
+        .from('lessons')
+        .delete()
+        .eq('id', lesson.id);
 
-    // Adjust active indices if current active lesson was deleted
-    if (activeChapterIdx === cIdx && activeLessonIdx === lIdx) {
+      if (error) throw error;
+
+      await fetchCourses();
       setActiveLessonIdx(0);
+    } catch (err) {
+      console.error("Error deleting lesson:", err);
+      alert("Error: " + err.message);
     }
   };
 
   // Delete Chapter handler
-  const handleDeleteChapter = (cIdx) => {
+  const handleDeleteChapter = async (cIdx) => {
     if (!course) return;
     if (course.curriculum.length <= 1) {
       alert("A course must have at least one chapter.");
       return;
     }
 
+    const chapter = course.curriculum[cIdx];
+    if (!chapter) return;
+
     if (!confirm("Are you sure you want to delete this chapter and all its lessons?")) return;
 
-    const updatedCurriculum = [...course.curriculum];
-    updatedCurriculum.splice(cIdx, 1);
-    updateCourseCurriculum(updatedCurriculum);
+    try {
+      const { error } = await supabase
+        .from('chapters')
+        .delete()
+        .eq('id', chapter.id);
 
-    setActiveChapterIdx(0);
-    setActiveLessonIdx(0);
+      if (error) throw error;
+
+      await fetchCourses();
+      setActiveChapterIdx(0);
+      setActiveLessonIdx(0);
+    } catch (err) {
+      console.error("Error deleting chapter:", err);
+      alert("Error: " + err.message);
+    }
   };
 
   // Edit Chapter Title handler
-  const handleEditChapterTitle = (cIdx) => {
+  const handleEditChapterTitle = async (cIdx) => {
     if (!course) return;
-    const oldTitle = course.curriculum[cIdx].chapterTitle;
-    const newTitle = prompt("Edit Chapter Title:", oldTitle);
-    if (!newTitle || newTitle === oldTitle) return;
+    const chapter = course.curriculum[cIdx];
+    if (!chapter) return;
 
-    const updatedCurriculum = [...course.curriculum];
-    updatedCurriculum[cIdx].chapterTitle = newTitle;
-    updateCourseCurriculum(updatedCurriculum);
-  };
+    const newTitle = prompt("Edit Chapter Title:", chapter.chapterTitle);
+    if (!newTitle || newTitle === chapter.chapterTitle) return;
 
-  // Update unified courses list helper
-  const updateCourseCurriculum = (newCurriculum) => {
-    const updatedCourses = courses.map(c => {
-      if (c.id === course.id) {
-        return {
-          ...c,
-          curriculum: newCurriculum
-        };
-      }
-      return c;
-    });
+    try {
+      const { error } = await supabase
+        .from('chapters')
+        .update({ chapter_title: newTitle })
+        .eq('id', chapter.id);
 
-    setCourses(updatedCourses);
-    localStorage.setItem('skillelevate_courses', JSON.stringify(updatedCourses));
+      if (error) throw error;
+      await fetchCourses();
+    } catch (err) {
+      console.error("Error updating chapter title:", err);
+      alert("Error: " + err.message);
+    }
   };
 
   // Save changes to active lesson title & contents
-  const handleSaveLessonChanges = () => {
+  const handleSaveLessonChanges = async () => {
     if (!course) return;
-    const currentChapter = course.curriculum[activeChapterIdx];
-    const currentLesson = currentChapter?.lessons[activeLessonIdx];
-    if (!currentLesson) return;
+    const chapter = course.curriculum[activeChapterIdx];
+    const lesson = chapter?.lessons[activeLessonIdx];
+    if (!lesson) return;
 
-    const updatedCurriculum = [...course.curriculum];
-    updatedCurriculum[activeChapterIdx].lessons[activeLessonIdx] = {
-      ...currentLesson,
-      title: draftTitle,
-      content: draftDesc,
-      media: mediaList
-    };
+    try {
+      // 1. Update lesson
+      const { error: lessonError } = await supabase
+        .from('lessons')
+        .update({
+          title: draftTitle,
+          content: draftDesc
+        })
+        .eq('id', lesson.id);
 
-    const updatedCourses = courses.map(c => {
-      if (c.id === course.id) {
-        return {
-          ...c,
-          tag: isPublished ? "Published" : "Draft",
-          curriculum: updatedCurriculum
-        };
-      }
-      return c;
-    });
+      if (lessonError) throw lessonError;
 
-    setCourses(updatedCourses);
-    localStorage.setItem('skillelevate_courses', JSON.stringify(updatedCourses));
+      // 2. Update course status
+      const { error: courseError } = await supabase
+        .from('courses')
+        .update({
+          status: isPublished ? "Published" : "Draft"
+        })
+        .eq('id', course.id);
 
-    setShowSaveSuccess(true);
-    setTimeout(() => setShowSaveSuccess(false), 2000);
+      if (courseError) throw courseError;
+
+      await fetchCourses();
+      setShowSaveSuccess(true);
+      setTimeout(() => setShowSaveSuccess(false), 2000);
+    } catch (err) {
+      console.error("Error saving lesson changes:", err);
+      alert("Error: " + err.message);
+    }
   };
 
   // Create Course Flow
-  const handleCreateCourse = () => {
+  const handleCreateCourse = async () => {
     const title = prompt("Enter New Course Name:");
     if (!title) return;
-    const newId = Date.now();
-    const newCourse = {
-      id: newId,
-      title,
-      category: "Web Development",
-      price: "$49.99",
-      priceVal: 49.99,
-      rating: "5.0",
-      reviews: 0,
-      author: "Alex Carter",
-      authorRole: "Senior Tech Educator",
-      authorBio: "Expert professional developer.",
-      tag: "Draft",
-      duration: "4 hours",
-      difficulty: "Beginner",
-      gradient: "from-[#4f46e5] to-emerald-700/60",
-      description: "New course created inside Instructor Studio builder.",
-      objectives: ["Learn foundations", "Build production projects"],
-      curriculum: [
-        {
-          chapterTitle: "Chapter 1: Kickoff",
+
+    try {
+      // 1. Insert course
+      const { data: newCourse, error: courseError } = await supabase
+        .from('courses')
+        .insert({
+          title,
+          category: "Web Development",
+          price_val: 49.99,
+          author_id: user?.id,
+          author_name: userProfile?.full_name || "Instructor",
+          author_role: "Senior Tech Educator",
+          author_bio: "Expert professional developer.",
+          difficulty: "Beginner",
+          gradient: "from-[#4f46e5] to-emerald-700/60",
+          description: "New course created inside Instructor Studio builder.",
+          objectives: ["Learn foundations", "Build production projects"],
+          status: "Draft"
+        })
+        .select()
+        .single();
+      
+      if (courseError) throw courseError;
+
+      // 2. Insert default Chapter
+      const { data: newChapter, error: chapterError } = await supabase
+        .from('chapters')
+        .insert({
+          course_id: newCourse.id,
+          chapter_title: "Chapter 1: Kickoff",
           duration: "10 mins",
-          lessons: [
-            { title: "First Lesson Overview", duration: "10:00", content: "Write details here..." }
-          ]
-        }
-      ]
-    };
-    const updated = [...courses, newCourse];
-    setCourses(updated);
-    localStorage.setItem('skillelevate_courses', JSON.stringify(updated));
-    setEditingCourseId(newId);
-    setActiveChapterIdx(0);
-    setActiveLessonIdx(0);
+          order_index: 0
+        })
+        .select()
+        .single();
+
+      if (chapterError) throw chapterError;
+
+      // 3. Insert default Lesson
+      const { error: lessonError } = await supabase
+        .from('lessons')
+        .insert({
+          chapter_id: newChapter.id,
+          title: "First Lesson Overview",
+          duration: "10:00",
+          content: "Write details here...",
+          order_index: 0
+        });
+
+      if (lessonError) throw lessonError;
+
+      await fetchCourses();
+      setEditingCourseId(newCourse.id);
+      setActiveChapterIdx(0);
+      setActiveLessonIdx(0);
+    } catch (err) {
+      console.error("Error creating course:", err);
+      alert("Error creating course: " + err.message);
+    }
   };
 
   // Delete Course Flow
-  const handleDeleteCourse = (cId, e) => {
+  const handleDeleteCourse = async (cId, e) => {
     e.stopPropagation();
     if (!confirm("Are you sure you want to delete this course? This action cannot be undone.")) return;
-    const updated = courses.filter(c => c.id !== cId);
-    setCourses(updated);
-    localStorage.setItem('skillelevate_courses', JSON.stringify(updated));
-    if (editingCourseId === cId) {
-      setEditingCourseId(null);
+
+    try {
+      const { error } = await supabase
+        .from('courses')
+        .delete()
+        .eq('id', cId);
+
+      if (error) throw error;
+
+      await fetchCourses();
+      if (editingCourseId === cId) {
+        setEditingCourseId(null);
+      }
+    } catch (err) {
+      console.error("Error deleting course:", err);
+      alert("Error deleting course: " + err.message);
     }
   };
 

@@ -5,13 +5,13 @@ import {
   ArrowLeft, ChevronRight, ChevronDown, CheckCircle2, PlayCircle, 
   Lock, Bookmark, Download, FileText, Code, Settings, Subtitles,
   HelpCircle, MessageSquare, Plus, Trash2, Edit3, ArrowRight, Check,
-  Sun, Moon
+  Sun, Moon, Loader2
 } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
-export default function LearningExperience({ course, setCurrentPage, darkMode, setDarkMode }) {
+export default function LearningExperience({ course, setCurrentPage, darkMode, setDarkMode, user, userProfile }) {
   if (!course) return null;
 
-  const storageProgressKey = `skillelevate_progress_course_${course.id}`;
   const storageNotesKey = `skillelevate_notes_course_${course.id}`;
   const storageDiscussionKey = `skillelevate_discussion_course_${course.id}`;
 
@@ -34,10 +34,54 @@ export default function LearningExperience({ course, setCurrentPage, darkMode, s
   });
 
   // Completed lessons tracking
-  const [completedLessons, setCompletedLessons] = useState(() => {
-    const saved = localStorage.getItem(storageProgressKey);
-    return saved ? JSON.parse(saved) : ["0-0"]; // Default first lesson completed for presentation
-  });
+  const [completedLessons, setCompletedLessons] = useState([]);
+
+  // Fetch initial progress from Supabase
+  useEffect(() => {
+    if (!user) return;
+    const fetchProgress = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('user_progress')
+          .select('lesson_id')
+          .eq('user_id', user.id);
+        if (error) throw error;
+        if (data) {
+          setCompletedLessons(data.map(p => p.lesson_id));
+        }
+      } catch (err) {
+        console.error("Error loading progress:", err);
+      }
+    };
+    fetchProgress();
+  }, [user]);
+
+  // Toggle completion in Supabase database
+  const toggleLessonCompletion = async (lessonId, shouldComplete) => {
+    if (!user) return;
+    
+    if (shouldComplete) {
+      setCompletedLessons(prev => [...prev, lessonId]);
+      try {
+        await supabase
+          .from('user_progress')
+          .upsert({ user_id: user.id, lesson_id: lessonId }, { onConflict: 'user_id,lesson_id' });
+      } catch (err) {
+        console.error("Error completing lesson:", err);
+      }
+    } else {
+      setCompletedLessons(prev => prev.filter(id => id !== lessonId));
+      try {
+        await supabase
+          .from('user_progress')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('lesson_id', lessonId);
+      } catch (err) {
+        console.error("Error removing lesson completion:", err);
+      }
+    }
+  };
 
   // Notes state
   const [notes, setNotes] = useState(() => {
@@ -111,11 +155,6 @@ export default function LearningExperience({ course, setCurrentPage, darkMode, s
     localStorage.setItem(`skillelevate_active_lesson_${course.id}`, activeLessonIndex.toString());
   }, [activeChapterIndex, activeLessonIndex, course.id]);
 
-  // Sync completed lessons to localStorage
-  useEffect(() => {
-    localStorage.setItem(storageProgressKey, JSON.stringify(completedLessons));
-  }, [completedLessons, storageProgressKey]);
-
   // Sync notes to localStorage
   useEffect(() => {
     localStorage.setItem(storageNotesKey, JSON.stringify(notes));
@@ -131,13 +170,47 @@ export default function LearningExperience({ course, setCurrentPage, darkMode, s
     setExpandedChapters(prev => ({ ...prev, [activeChapterIndex]: true }));
   }, [activeChapterIndex]);
 
+  // Track learning sessions study streak
+  useEffect(() => {
+    if (!user || !isPlaying) return;
+
+    const interval = setInterval(async () => {
+      const todayStr = new Date().toISOString().split('T')[0];
+      try {
+        const { data, error } = await supabase
+          .from('learning_sessions')
+          .select('duration_seconds')
+          .eq('user_id', user.id)
+          .eq('session_date', todayStr)
+          .maybeSingle();
+
+        if (error) throw error;
+
+        const currentSecs = data ? data.duration_seconds : 0;
+        const newSecs = currentSecs + 10;
+
+        await supabase
+          .from('learning_sessions')
+          .upsert({
+            user_id: user.id,
+            session_date: todayStr,
+            duration_seconds: newSecs
+          }, { onConflict: 'user_id,session_date' });
+
+      } catch (err) {
+        console.error("Error logging study duration:", err);
+      }
+    }, 10000); // Log duration increment every 10s of play
+
+    return () => clearInterval(interval);
+  }, [isPlaying, user]);
+
   // Handle active video change
   const currentChapter = course.curriculum[activeChapterIndex];
   const currentLesson = currentChapter?.lessons[activeLessonIndex];
 
   // We loop a beautiful public demo stream or switch it slightly based on selection to create realism
   const getMockVideoSource = () => {
-    // Alternate video paths to create realistic changes
     const hash = (activeChapterIndex + activeLessonIndex) % 3;
     if (hash === 0) return "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4";
     if (hash === 1) return "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4";
@@ -145,7 +218,6 @@ export default function LearningExperience({ course, setCurrentPage, darkMode, s
   };
 
   useEffect(() => {
-    // Reset states on lesson change
     if (videoRef.current) {
       videoRef.current.load();
       setIsPlaying(false);
@@ -175,11 +247,9 @@ export default function LearningExperience({ course, setCurrentPage, darkMode, s
     if (videoRef.current) {
       setCurrentTime(videoRef.current.currentTime);
       
-      // Auto complete lesson if user hits 98% duration
       const percent = (videoRef.current.currentTime / videoRef.current.duration) * 100;
-      const lessonKey = `${activeChapterIndex}-${activeLessonIndex}`;
-      if (percent >= 98 && !completedLessons.includes(lessonKey)) {
-        setCompletedLessons(prev => [...prev, lessonKey]);
+      if (percent >= 98 && currentLesson && !completedLessons.includes(currentLesson.id)) {
+        toggleLessonCompletion(currentLesson.id, true);
       }
     }
   };
@@ -315,9 +385,9 @@ export default function LearningExperience({ course, setCurrentPage, darkMode, s
 
   // Curriculum stats
   const totalLessonsCount = course.curriculum.reduce((acc, chap) => acc + chap.lessons.length, 0);
-  const completedLessonsCount = course.curriculum.reduce((acc, chap, cIdx) => {
-    const completedInChapter = chap.lessons.filter((_, lIdx) => 
-      completedLessons.includes(`${cIdx}-${lIdx}`)
+  const completedLessonsCount = course.curriculum.reduce((acc, chap) => {
+    const completedInChapter = chap.lessons.filter(les => 
+      completedLessons.includes(les.id)
     ).length;
     return acc + completedInChapter;
   }, 0);
@@ -357,10 +427,9 @@ export default function LearningExperience({ course, setCurrentPage, darkMode, s
     }
 
     // Auto mark current lesson complete when going forward
-    if (direction === 'next') {
-      const currentKey = `${activeChapterIndex}-${activeLessonIndex}`;
-      if (!completedLessons.includes(currentKey)) {
-        setCompletedLessons(prev => [...prev, currentKey]);
+    if (direction === 'next' && currentLesson) {
+      if (!completedLessons.includes(currentLesson.id)) {
+        toggleLessonCompletion(currentLesson.id, true);
       }
     }
 
@@ -647,6 +716,22 @@ export default function LearningExperience({ course, setCurrentPage, darkMode, s
                       transition={{ duration: 0.2 }}
                       className="space-y-6"
                     >
+                      {currentLesson && (
+                        <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-900 border border-[#c7c4d8]/20 dark:border-white/5 rounded-2xl p-4">
+                          <span className="text-xs font-semibold text-on-surface-variant dark:text-slate-400">Lesson Status</span>
+                          <button
+                            onClick={() => toggleLessonCompletion(currentLesson.id, !completedLessons.includes(currentLesson.id))}
+                            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                              completedLessons.includes(currentLesson.id)
+                                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500 hover:bg-emerald-500/20'
+                                : 'bg-primary hover:bg-primary-container text-white border-transparent shadow'
+                            }`}
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>{completedLessons.includes(currentLesson.id) ? 'Completed' : 'Mark as Complete'}</span>
+                          </button>
+                        </div>
+                      )}
                       <div>
                         <h3 className="font-bold text-base md:text-lg text-on-surface dark:text-white mb-3">
                           What You'll Learn in This Lesson
@@ -956,7 +1041,7 @@ export default function LearningExperience({ course, setCurrentPage, darkMode, s
                         <div className="px-2 pb-3 pt-1 border-t border-[#c7c4d8]/10 dark:border-white/5 space-y-1 bg-slate-50/20 dark:bg-slate-900/20">
                           {chapter.lessons.map((lesson, lIdx) => {
                             const isCurrent = activeChapterIndex === cIdx && activeLessonIndex === lIdx;
-                            const isCompleted = completedLessons.includes(`${cIdx}-${lIdx}`);
+                            const isCompleted = completedLessons.includes(lesson.id);
                             
                             return (
                               <button

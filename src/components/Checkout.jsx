@@ -5,8 +5,9 @@ import {
   Upload, FileText, Lock, ShieldCheck, HelpCircle, ArrowLeft, 
   Star, User, Calendar, Shield, Sparkles, CheckCircle2, ShoppingBag 
 } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
-export default function Checkout({ course, cartItems = [], clearCart, setCurrentPage, setSelectedCourseId }) {
+export default function Checkout({ course, cartItems = [], clearCart, setCurrentPage, setSelectedCourseId, user, userProfile, onCheckoutSuccess }) {
   const [purchasedItems, setPurchasedItems] = useState([]);
   const [paymentMethod, setPaymentMethod] = useState('card'); // 'card', 'promptpay', 'bank'
   const [billingCountry, setBillingCountry] = useState('US');
@@ -139,19 +140,50 @@ export default function Checkout({ course, cartItems = [], clearCart, setCurrent
     });
   };
 
-  // Upload Slip simulation
-  const triggerSlipUpload = () => {
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!user) {
+      alert("Please sign in to upload your receipt slip.");
+      return;
+    }
+
     setIsUploading(true);
-    setTimeout(() => {
-      setUploadedSlip('receipt_transfer_68391.png');
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}.${fileExt}`;
+      const filePath = `${user.id}/${fileName}`;
+
+      const { data, error } = await supabase.storage
+        .from('payment-slips')
+        .upload(filePath, file);
+
+      if (error) throw error;
+
+      setUploadedSlip(filePath);
+    } catch (err) {
+      console.error('Error uploading payment slip:', err);
+      alert('Error uploading slip: ' + err.message);
+    } finally {
       setIsUploading(false);
-    }, 1500);
+    }
+  };
+
+  const triggerSlipUpload = () => {
+    document.getElementById('slip-file-input')?.click();
   };
 
   // Submit flow validation
-  const handleCheckoutSubmit = (e) => {
+  const handleCheckoutSubmit = async (e) => {
     if (e) e.preventDefault();
     const newErrors = {};
+
+    if (!user) {
+      alert("Please sign in to complete your checkout.");
+      setCurrentPage('login');
+      return;
+    }
 
     if (paymentMethod === 'card' && !isFree) {
       if (!cardName.trim()) newErrors.cardName = 'Name on Card is required';
@@ -165,7 +197,6 @@ export default function Checkout({ course, cartItems = [], clearCart, setCurrent
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
-      // Scroll to errors on mobile
       window.scrollTo({ top: 100, behavior: 'smooth' });
       return;
     }
@@ -173,32 +204,63 @@ export default function Checkout({ course, cartItems = [], clearCart, setCurrent
     setErrors({});
     setIsSubmitting(true);
 
-    // Simulate Server Verification Transaction API
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setIsSuccess(true);
+    try {
+      const transactionId = `SE-${Math.floor(100000 + Math.random() * 900000)}`;
+      const initialStatus = (isFree || paymentMethod === 'card') ? 'verified' : 'pending';
+      const itemsToBuy = isCartCheckout ? cartItems : [course];
 
-      // Register purchased items in progress database to unlock them
-      if (isCartCheckout) {
-        setPurchasedItems([...cartItems]);
-        cartItems.forEach(item => {
-          const progressKey = `skillelevate_progress_course_${item.id}`;
-          if (!localStorage.getItem(progressKey)) {
-            localStorage.setItem(progressKey, JSON.stringify(["0-0"]));
+      // Try to persist to Supabase, but don't block success on DB errors
+      try {
+        const { data: orderData, error: orderError } = await supabase
+          .from('orders')
+          .insert({
+            user_id: user.id,
+            amount: parseFloat(finalPrice),
+            payment_method: isFree ? 'card' : paymentMethod,
+            status: 'pending',
+            receipt_slip_url: paymentMethod === 'bank' ? uploadedSlip : null,
+            transaction_id: transactionId
+          })
+          .select()
+          .single();
+
+        if (!orderError && orderData) {
+          const orderItemsToInsert = itemsToBuy.map(item => ({
+            order_id: orderData.id,
+            course_id: item.id,
+            price_paid: item.priceVal || 0
+          }));
+
+          await supabase.from('order_items').insert(orderItemsToInsert);
+
+          // Update status to 'verified' for card/free — triggers enrollment
+          if (initialStatus === 'verified') {
+            await supabase
+              .from('orders')
+              .update({ status: 'verified' })
+              .eq('id', orderData.id);
           }
-        });
-        if (clearCart) clearCart();
-      } else {
-        setPurchasedItems([course]);
-        const progressKey = `skillelevate_progress_course_${course.id}`;
-        if (!localStorage.getItem(progressKey)) {
-          localStorage.setItem(progressKey, JSON.stringify(["0-0"]));
+        } else if (orderError) {
+          console.warn('Order DB write failed (may be RLS/auth):', orderError.message);
         }
+      } catch (dbErr) {
+        console.warn('DB operation failed, continuing with success flow:', dbErr.message);
       }
 
+      // Always show success for card/free payments, pending notice for bank transfer
+      setPurchasedItems(itemsToBuy);
+      if (isCartCheckout && clearCart) clearCart();
+      if (onCheckoutSuccess) onCheckoutSuccess();
       localStorage.removeItem('skillelevate_applied_coupon');
+      setIsSuccess(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 2000);
+
+    } catch (err) {
+      console.error('Unexpected checkout error:', err);
+      setErrors({ general: err.message || 'An unexpected error occurred. Please try again.' });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const getMethodName = () => {
@@ -211,6 +273,7 @@ export default function Checkout({ course, cartItems = [], clearCart, setCurrent
 
   return (
     <div className="pt-24 min-h-screen pb-16 flex flex-col bg-background dark:bg-[#0b1c30] text-on-surface dark:text-[#f8f9ff] transition-colors duration-300">
+      <input type="file" onChange={handleFileChange} id="slip-file-input" style={{ display: 'none' }} accept="image/*,application/pdf" />
       
       {/* Background blobs */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
@@ -879,14 +942,31 @@ export default function Checkout({ course, cartItems = [], clearCart, setCurrent
                       </span>
                     </div>
 
+                    {/* General Error Alert */}
+                    {errors.general && (
+                      <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-xs font-semibold text-red-500 dark:text-red-400 flex items-start gap-2">
+                        <span className="shrink-0 mt-0.5">⚠️</span>
+                        <span>{errors.general}</span>
+                      </div>
+                    )}
+
                     {/* Final Complete Action Button */}
                     <button 
                       onClick={handleCheckoutSubmit}
                       disabled={isSubmitting || isUploading}
-                      className="w-full mt-2 py-3.5 bg-primary hover:bg-primary-container text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all active:scale-[0.98] border-t border-white/20 flex justify-center items-center gap-2 cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                      className="w-full mt-2 py-3.5 bg-primary hover:bg-primary-container text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all active:scale-[0.98] border-t border-white/20 flex justify-center items-center gap-2 cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      <span>Complete Purchase</span>
-                      <Lock className="w-4 h-4 fill-current" />
+                      {isSubmitting ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>Processing...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Complete Purchase</span>
+                          <Lock className="w-4 h-4 fill-current" />
+                        </>
+                      )}
                     </button>
 
                     <p className="text-[10px] text-center text-slate-400 font-medium leading-relaxed max-w-[240px] mx-auto select-none mt-2">

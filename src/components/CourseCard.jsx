@@ -1,9 +1,11 @@
 import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Star, Code, Palette, Cpu, Briefcase, ShoppingCart, Check } from 'lucide-react';
+import { Star, Code, Palette, Cpu, Briefcase, ShoppingCart, Check, Pencil } from 'lucide-react';
 
-export default function CourseCard({ course, onSelectCourse, addToCart, cartItems = [], setCurrentPage }) {
-  const isEnrolled = localStorage.getItem(`skillelevate_progress_course_${course.id}`) !== null;
+export default function CourseCard({ course, onSelectCourse, addToCart, cartItems = [], setCurrentPage, isEnrolled: isEnrolledProp, userProfile, onEditCourse }) {
+  const isInstructor = userProfile?.role === 'instructor' || userProfile?.role === 'admin';
+  const isOwnCourse = isInstructor && course.authorId && userProfile?.id && String(course.authorId) === String(userProfile.id);
+  const isEnrolled = isEnrolledProp !== undefined ? isEnrolledProp : localStorage.getItem(`skillelevate_progress_course_${course.id}`) !== null;
   const isInCart = cartItems?.some(item => item.id === course.id);
   const cardRef = useRef(null);
   const [rotateX, setRotateX] = useState(0);
@@ -135,44 +137,66 @@ export default function CourseCard({ course, onSelectCourse, addToCart, cartItem
           {course.description}
         </p>
 
-        {/* Add to Cart button */}
+        {/* Action button — varies by role */}
         <div className="mb-4">
-          <button
-            onClick={(e) => {
-              e.stopPropagation(); // Prevent card navigation to details
-              if (isEnrolled) {
-                onSelectCourse?.(course.id);
-              } else if (isInCart) {
-                setCurrentPage?.('cart');
-              } else {
-                addToCart?.(course);
-              }
-            }}
-            className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all active:scale-[0.97] cursor-pointer flex items-center justify-center gap-1.5 select-none ${
-              isEnrolled
-                ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25'
-                : isInCart
-                ? 'bg-primary text-white hover:opacity-90 border-t border-white/20 shadow-sm'
-                : 'bg-slate-900 dark:bg-slate-800 text-white hover:bg-slate-800 dark:hover:bg-slate-700 hover:shadow shadow-sm'
-            }`}
-          >
-            {isEnrolled ? (
-              <>
-                <Check className="w-3.5 h-3.5 stroke-[3]" />
-                <span>Enrolled • Learn Now</span>
-              </>
-            ) : isInCart ? (
-              <>
-                <ShoppingCart className="w-3.5 h-3.5" />
-                <span>Go to Cart</span>
-              </>
+          {isInstructor ? (
+            isOwnCourse ? (
+              /* Edit Course button for instructor's own course */
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditCourse?.(course.id);
+                }}
+                className="w-full py-2.5 rounded-xl text-xs font-bold transition-all active:scale-[0.97] cursor-pointer flex items-center justify-center gap-1.5 select-none bg-primary text-white hover:opacity-90 border-t border-white/20 shadow-sm"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                <span>Edit Course</span>
+              </button>
             ) : (
-              <>
-                <ShoppingCart className="w-3.5 h-3.5" />
-                <span>Add to Cart</span>
-              </>
-            )}
-          </button>
+              /* Disabled placeholder for other courses when instructor */
+              <div className="w-full py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 select-none bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 border border-slate-200 dark:border-slate-700 cursor-not-allowed">
+                <span>View Only</span>
+              </div>
+            )
+          ) : (
+            /* Normal student Add to Cart / Enrolled button */
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isEnrolled) {
+                  onSelectCourse?.(course.id);
+                } else if (isInCart) {
+                  setCurrentPage?.('cart');
+                } else {
+                  addToCart?.(course);
+                }
+              }}
+              className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all active:scale-[0.97] cursor-pointer flex items-center justify-center gap-1.5 select-none ${
+                isEnrolled
+                  ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25'
+                  : isInCart
+                  ? 'bg-primary text-white hover:opacity-90 border-t border-white/20 shadow-sm'
+                  : 'bg-slate-900 dark:bg-slate-800 text-white hover:bg-slate-800 dark:hover:bg-slate-700 hover:shadow shadow-sm'
+              }`}
+            >
+              {isEnrolled ? (
+                <>
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  <span>Enrolled • Learn Now</span>
+                </>
+              ) : isInCart ? (
+                <>
+                  <ShoppingCart className="w-3.5 h-3.5" />
+                  <span>Go to Cart</span>
+                </>
+              ) : (
+                <>
+                  <ShoppingCart className="w-3.5 h-3.5" />
+                  <span>Add to Cart</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
 
         {/* Card Footer - Author & Rating */}

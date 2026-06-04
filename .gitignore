@@ -28,3 +28,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+.env
+seed_data.sql
+supabase_schema.sql
+database_design.md
