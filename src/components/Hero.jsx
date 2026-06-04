@@ -68,14 +68,14 @@ export default function Hero({ setCurrentPage }) {
       <div className="absolute inset-0 bg-gradient-to-t from-[#f8f9ff] via-[#f8f9ff]/95 to-[#f8f9ff]/50 dark:from-[#0b1c30] dark:via-[#0b1c30]/95 dark:to-[#0b1c30]/50 md:bg-gradient-to-r md:from-[#f8f9ff] md:via-[#f8f9ff]/95 md:to-transparent md:dark:from-[#0b1c30] md:dark:via-[#0b1c30]/95 md:dark:to-transparent -z-10 pointer-events-none" />
 
       {/* Foreground Content Container */}
-      <div className="max-w-[1440px] w-full mx-auto px-6 sm:px-8 md:px-margin-desktop flex items-center justify-between h-full relative z-10 pt-28">
+      <div className="max-w-[1440px] w-full mx-auto px-6 sm:px-10 md:px-margin-desktop flex items-center justify-between h-full relative z-10 pt-28">
         
         {/* Content Box — left-aligned, constrained to prevent overflow */}
         <motion.div 
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="flex flex-col gap-5 md:gap-6 max-w-full sm:max-w-xl md:max-w-2xl text-left py-10 md:py-0 w-full relative z-20 items-start overflow-hidden"
+          className="flex flex-col gap-5 md:gap-6 max-w-full sm:max-w-2xl md:max-w-2xl text-left py-10 md:py-0 w-full relative z-20 items-start overflow-hidden"
         >
           {/* Tag Badge */}
           <div className="flex flex-col gap-3 md:gap-3.5 items-start">
@@ -112,7 +112,7 @@ export default function Hero({ setCurrentPage }) {
           {/* Action buttons */}
           <motion.div 
             variants={itemVariants}
-            className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-2 w-full"
+            className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-2 w-full sm:w-auto"
           >
             <motion.button 
               whileHover={{ scale: 1.02, y: -2 }}
