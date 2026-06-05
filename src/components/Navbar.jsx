@@ -169,6 +169,17 @@ export default function Navbar({
                 </button>
               )}
 
+              {/* Admin Portal button */}
+              {userProfile?.role === 'admin' && (
+                <button 
+                  onClick={() => setCurrentPage('admin')}
+                  className="text-xs font-bold border border-primary/20 bg-primary/5 dark:bg-primary-fixed/10 text-primary dark:text-primary-fixed px-3.5 py-2.5 rounded-xl hover:bg-primary/10 transition-colors active:scale-95 duration-200 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none cursor-pointer flex items-center gap-1.5"
+                  aria-label="Admin Portal"
+                >
+                  <span>Admin Portal</span>
+                </button>
+              )}
+
               {/* Shopping Cart — hidden for instructors */}
               {!isInstructor && (
                 <button 
@@ -228,6 +239,14 @@ export default function Navbar({
                           className="w-full text-left px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer text-slate-800 dark:text-slate-200"
                         >
                           Instructor Studio
+                        </button>
+                      )}
+                      {userProfile?.role === 'admin' && (
+                        <button 
+                          onClick={() => { setDropdownOpen(false); setCurrentPage('admin'); }}
+                          className="w-full text-left px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer text-slate-800 dark:text-slate-200"
+                        >
+                          Admin Portal
                         </button>
                       )}
                       <button 
@@ -388,6 +407,16 @@ export default function Navbar({
                   label="Instructor Studio"
                   active={currentPage === 'course-builder'}
                   onClick={() => navigate('course-builder')}
+                />
+              )}
+
+              {/* Admin Portal — admins only */}
+              {userProfile?.role === 'admin' && (
+                <MobileNavLink
+                  icon={<Bolt className="w-5 h-5" />}
+                  label="Admin Portal"
+                  active={currentPage === 'admin'}
+                  onClick={() => navigate('admin')}
                 />
               )}
 

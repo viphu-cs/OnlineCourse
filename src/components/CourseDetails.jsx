@@ -671,7 +671,7 @@ export default function CourseDetails({ course, setCurrentPage, addToCart, cartI
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               transition={{ type: 'spring', damping: 28, stiffness: 240 }}
-              className="bg-white dark:bg-[#0f172a] w-full max-w-lg rounded-2xl shadow-2xl border border-[#c7c4d8]/30 dark:border-white/5 overflow-hidden z-10 flex flex-col relative max-h-[90vh] transition-colors"
+              className="bg-white dark:bg-[#0f172a] w-full max-w-[512px] rounded-2xl shadow-2xl border border-[#c7c4d8]/30 dark:border-white/5 overflow-hidden z-10 flex flex-col relative max-h-[90vh] transition-colors"
             >
               {/* Close Button */}
               <button 

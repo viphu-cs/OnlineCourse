@@ -1,18 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Play, Pause, Volume2, VolumeX, Maximize, Minimize, 
   ArrowLeft, ChevronRight, ChevronDown, CheckCircle2, PlayCircle, 
   Lock, Bookmark, Download, FileText, Code, Settings, Subtitles,
   HelpCircle, MessageSquare, Plus, Trash2, Edit3, ArrowRight, Check,
-  Sun, Moon, Loader2
+  Sun, Moon, Loader2, Star
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 export default function LearningExperience({ course, setCurrentPage, darkMode, setDarkMode, user, userProfile }) {
   if (!course) return null;
 
-  const storageNotesKey = `skillelevate_notes_course_${course.id}`;
+  const storageNotesKey = `skillelevate_notes_user_${user?.id || 'guest'}_course_${course.id}`;
   const storageDiscussionKey = `skillelevate_discussion_course_${course.id}`;
 
   // Active state within curriculum
@@ -35,6 +36,50 @@ export default function LearningExperience({ course, setCurrentPage, darkMode, s
 
   // Completed lessons tracking
   const [completedLessons, setCompletedLessons] = useState([]);
+
+  // Rating states
+  const [hasRated, setHasRated] = useState(false);
+  const [hasSkipped, setHasSkipped] = useState(false);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [ratingValue, setRatingValue] = useState(5);
+  const [hoveredRating, setHoveredRating] = useState(null);
+  const [reviewText, setReviewText] = useState('');
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
+
+  // Lesson IDs of the current course
+  const courseLessonIds = course?.curriculum?.flatMap(chap => chap.lessons.map(les => les.id)) || [];
+
+  // Trigger rating modal if course is already completed and not yet rated or skipped
+  useEffect(() => {
+    if (completedLessons.length === 0 || courseLessonIds.length === 0) return;
+    if (hasRated || hasSkipped) return;
+
+    // Check if current course is 100% complete
+    const completedCount = courseLessonIds.filter(id => completedLessons.includes(id)).length;
+    if (completedCount === courseLessonIds.length) {
+      setShowRatingModal(true);
+    }
+  }, [completedLessons, courseLessonIds, hasRated, hasSkipped]);
+
+  // Fetch initial rating status from Supabase
+  useEffect(() => {
+    if (!user || !course) return;
+    const checkUserRating = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('course_ratings')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('course_id', course.id)
+          .maybeSingle();
+        if (error) throw error;
+        setHasRated(!!data);
+      } catch (err) {
+        console.error("Error checking user rating status:", err);
+      }
+    };
+    checkUserRating();
+  }, [user, course]);
 
   // Fetch initial progress from Supabase
   useEffect(() => {
@@ -61,25 +106,90 @@ export default function LearningExperience({ course, setCurrentPage, darkMode, s
     if (!user) return;
     
     if (shouldComplete) {
-      setCompletedLessons(prev => [...prev, lessonId]);
+      if (completedLessons.includes(lessonId)) return;
+      const nextCompleted = [...completedLessons, lessonId];
+      setCompletedLessons(nextCompleted);
       try {
         await supabase
           .from('user_progress')
           .upsert({ user_id: user.id, lesson_id: lessonId }, { onConflict: 'user_id,lesson_id' });
+
+        // Check if this makes the course 100% complete
+        const completedCount = courseLessonIds.filter(id => nextCompleted.includes(id)).length;
+        if (completedCount === courseLessonIds.length) {
+          // Update enrollment status to completed
+          await supabase
+            .from('enrollments')
+            .update({ status: 'completed' })
+            .eq('user_id', user.id)
+            .eq('course_id', course.id);
+            
+          if (!hasRated) {
+            setShowRatingModal(true);
+          }
+        }
       } catch (err) {
         console.error("Error completing lesson:", err);
       }
     } else {
-      setCompletedLessons(prev => prev.filter(id => id !== lessonId));
+      if (!completedLessons.includes(lessonId)) return;
+      const nextCompleted = completedLessons.filter(id => id !== lessonId);
+      setCompletedLessons(nextCompleted);
       try {
         await supabase
           .from('user_progress')
           .delete()
           .eq('user_id', user.id)
           .eq('lesson_id', lessonId);
+
+        // Check if this makes the course less than 100% complete
+        const completedCount = courseLessonIds.filter(id => nextCompleted.includes(id)).length;
+        if (completedCount < courseLessonIds.length) {
+          // Revert enrollment status to active
+          await supabase
+            .from('enrollments')
+            .update({ status: 'active' })
+            .eq('user_id', user.id)
+            .eq('course_id', course.id);
+        }
       } catch (err) {
         console.error("Error removing lesson completion:", err);
       }
+    }
+  };
+
+  // Handle rating and review submission
+  const handleSubmitRating = async (e) => {
+    if (e) e.preventDefault();
+    if (!user || !course) return;
+
+    setIsSubmittingRating(true);
+    try {
+      // 1. Insert review into course_ratings table
+      const { error: ratingError } = await supabase
+        .from('course_ratings')
+        .insert({
+          user_id: user.id,
+          course_id: course.id,
+          rating: ratingValue,
+          review_text: reviewText.trim() || null
+        });
+
+      if (ratingError) throw ratingError;
+
+      // 2. Ensure enrollment status is updated to completed
+      await supabase
+        .from('enrollments')
+        .update({ status: 'completed' })
+        .eq('user_id', user.id)
+        .eq('course_id', course.id);
+
+      setHasRated(true);
+      setShowRatingModal(false);
+    } catch (err) {
+      console.error("Error submitting rating:", err);
+    } finally {
+      setIsSubmittingRating(false);
     }
   };
 
@@ -164,6 +274,58 @@ export default function LearningExperience({ course, setCurrentPage, darkMode, s
   useEffect(() => {
     localStorage.setItem(storageDiscussionKey, JSON.stringify(discussions));
   }, [discussions, storageDiscussionKey]);
+
+  // Reload notes when user or course changes
+  useEffect(() => {
+    const saved = localStorage.getItem(storageNotesKey);
+    if (saved) {
+      setNotes(JSON.parse(saved));
+    } else {
+      setNotes([
+        {
+          id: 'note-1',
+          timestamp: 85,
+          timeFormatted: '01:25',
+          text: 'Semantic naming (e.g. primary-action) is much better than color names (blue-500) for scaling multi-theme platforms.',
+          chapterTitle: course.curriculum[0]?.chapterTitle || 'Chapter 1',
+          lessonTitle: course.curriculum[0]?.lessons[0]?.title || 'Lesson 1'
+        }
+      ]);
+    }
+  }, [storageNotesKey, course.curriculum, course.id]);
+
+  // Reload discussions when course changes
+  useEffect(() => {
+    const saved = localStorage.getItem(storageDiscussionKey);
+    if (saved) {
+      setDiscussions(JSON.parse(saved));
+    } else {
+      setDiscussions({
+        "0-0": [
+          {
+            id: 'comm-1',
+            author: 'Alex Carter',
+            avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80',
+            role: 'Student',
+            timestamp: '2 hours ago',
+            content: 'This clear explanation of Global vs Semantic tokens cleared up so many naming debates on our team!',
+            likes: 4,
+            replies: []
+          },
+          {
+            id: 'comm-2',
+            author: 'Elena Rostova',
+            avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80',
+            role: 'Instructor',
+            timestamp: '1 hour ago',
+            content: 'So glad it helped, Alex! In Chapter 3 we will write a script to sync these straight into JSON outputs.',
+            likes: 12,
+            replies: []
+          }
+        ]
+      });
+    }
+  }, [storageDiscussionKey]);
 
   // Expand chapter automatically if changed
   useEffect(() => {
@@ -365,11 +527,17 @@ export default function LearningExperience({ course, setCurrentPage, darkMode, s
     if (!commentInput.trim()) return;
 
     const lessonKey = `${activeChapterIndex}-${activeLessonIndex}`;
+    const authorName = userProfile?.full_name || user?.email || 'Anonymous';
+    const authorAvatar = userProfile?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80';
+    const authorRole = userProfile?.role 
+      ? userProfile.role.charAt(0).toUpperCase() + userProfile.role.slice(1) 
+      : 'Student';
+
     const newComment = {
       id: `comm-${Date.now()}`,
-      author: 'You (Student)',
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
-      role: 'Student',
+      author: authorName,
+      avatar: authorAvatar,
+      role: authorRole,
       timestamp: 'Just now',
       content: commentInput,
       likes: 0,
@@ -392,6 +560,8 @@ export default function LearningExperience({ course, setCurrentPage, darkMode, s
     return acc + completedInChapter;
   }, 0);
   const progressPercent = Math.round((completedLessonsCount / totalLessonsCount) * 100) || 0;
+  const isFullyCompleted = courseLessonIds.length > 0 && 
+    courseLessonIds.every(id => completedLessons.includes(id));
 
   // Toggle chapter expansion
   const toggleChapter = (cIdx) => {
@@ -905,7 +1075,7 @@ export default function LearningExperience({ course, setCurrentPage, darkMode, s
                     >
                       <form onSubmit={handleAddComment} className="flex gap-3">
                         <img 
-                          src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80" 
+                          src={userProfile?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80'} 
                           alt="Your Avatar"
                           className="w-10 h-10 rounded-full object-cover shrink-0"
                         />
@@ -984,13 +1154,32 @@ export default function LearningExperience({ course, setCurrentPage, darkMode, s
               </button>
 
               <button
-                onClick={() => navigateLesson('next')}
-                disabled={!hasNextLesson}
+                onClick={() => {
+                  console.log("[LearningExperience] Clicked navigation button. hasNext:", hasNextLesson, "completed:", completedLessons.includes(currentLesson?.id));
+                  if (hasNextLesson) {
+                    navigateLesson('next');
+                  } else {
+                    if (currentLesson && !completedLessons.includes(currentLesson.id)) {
+                      toggleLessonCompletion(currentLesson.id, true);
+                    } else {
+                      setShowRatingModal(true);
+                    }
+                  }
+                }}
+                disabled={!hasNextLesson && isFullyCompleted && hasRated}
                 className={`flex items-center gap-1.5 font-bold text-sm text-white bg-primary hover:bg-primary-container rounded-xl px-5 py-3 transition-all shadow cursor-pointer ${
-                  !hasNextLesson ? 'opacity-40 cursor-not-allowed hover:bg-primary' : ''
+                  (!hasNextLesson && isFullyCompleted && hasRated) ? 'opacity-40 cursor-not-allowed hover:bg-primary' : ''
                 }`}
               >
-                <span>{hasNextLesson ? 'Next Lesson' : 'Course Completed!'}</span>
+                <span>
+                  {hasNextLesson 
+                    ? 'Next Lesson' 
+                    : (!isFullyCompleted)
+                      ? 'Complete Course'
+                      : !hasRated
+                        ? 'Rate Course'
+                        : 'Course Completed!'}
+                </span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
@@ -1092,6 +1281,136 @@ export default function LearningExperience({ course, setCurrentPage, darkMode, s
 
       </main>
 
+      {/* Star Rating Modal Overlay */}
+      {/* Star Rating Modal Overlay */}
+      {createPortal(
+        <AnimatePresence>
+          {showRatingModal && (
+            <div className="fixed inset-0 w-screen h-screen z-50 flex items-center justify-center p-4">
+              {/* Backdrop */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowRatingModal(false)}
+                className="absolute inset-0 w-screen h-screen bg-slate-950/40 backdrop-blur-md"
+              />
+
+              {/* Modal Card */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ type: 'spring', duration: 0.5, bounce: 0.2 }}
+                className="bg-white/95 dark:bg-[#0c1e35]/95 border border-[#c7c4d8]/40 dark:border-white/10 rounded-3xl p-6 md:p-8 max-w-2xl w-[90%] sm:w-full relative z-10 shadow-2xl flex flex-col gap-6 text-center backdrop-blur-lg"
+              >
+                <div className="flex flex-col items-center gap-2">
+                  {/* Celebrating icon */}
+                  <motion.div 
+                    initial={{ rotate: -15, scale: 0 }}
+                    animate={{ rotate: 0, scale: 1 }}
+                    transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+                    className="w-16 h-16 bg-amber-500/10 text-amber-500 dark:bg-amber-400/15 dark:text-amber-400 rounded-full flex items-center justify-center mb-2"
+                  >
+                    <Star className="w-8 h-8 fill-current" />
+                  </motion.div>
+                  <h3 className="font-display font-bold text-xl md:text-2xl text-[#0b1c30] dark:text-white">
+                    Congratulations! 🎉
+                  </h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+                    You've successfully completed all lessons in <strong className="text-[#0b1c30] dark:text-white font-semibold">{course.title}</strong>. Share your feedback to help future learners!
+                  </p>
+                </div>
+
+                <form onSubmit={handleSubmitRating} className="flex flex-col gap-5">
+                  {/* Star selector */}
+                  <div className="flex flex-col items-center gap-2">
+                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                      Your Rating
+                    </span>
+                    <div className="flex justify-center gap-2">
+                      {[1, 2, 3, 4, 5].map((star) => {
+                        const isFilled = hoveredRating !== null ? star <= hoveredRating : star <= ratingValue;
+                        return (
+                          <button
+                            key={star}
+                            type="button"
+                            onClick={() => setRatingValue(star)}
+                            onMouseEnter={() => setHoveredRating(star)}
+                            onMouseLeave={() => setHoveredRating(null)}
+                            className="hover:scale-115 active:scale-90 transition-all focus:outline-none p-1 cursor-pointer"
+                          >
+                            <Star
+                              className={`w-9 h-9 md:w-10 md:h-10 transition-colors duration-150 ${
+                                isFilled 
+                                  ? 'fill-amber-400 text-amber-400' 
+                                  : 'text-slate-200 dark:text-slate-700'
+                              }`}
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <span className="text-xs font-bold text-amber-500 dark:text-amber-400 h-4 transition-all">
+                      {ratingValue === 5 && "Outstanding! 🌟"}
+                      {ratingValue === 4 && "Very Good! 👍"}
+                      {ratingValue === 3 && "Good / Average 🙂"}
+                      {ratingValue === 2 && "Fair 😐"}
+                      {ratingValue === 1 && "Poor 😞"}
+                    </span>
+                  </div>
+
+                  {/* Feedback textarea */}
+                  <div className="flex flex-col text-left gap-1.5">
+                    <label htmlFor="review-comment" className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                      Write a Review (Optional)
+                    </label>
+                    <textarea
+                      id="review-comment"
+                      rows="3"
+                      value={reviewText}
+                      onChange={(e) => setReviewText(e.target.value)}
+                      placeholder="Share your thoughts about this course..."
+                      className="w-full px-4 py-3 text-sm bg-slate-50 dark:bg-[#081525] border border-[#c7c4d8]/40 dark:border-white/5 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-[#0b1c30] dark:text-white placeholder-slate-400 dark:placeholder-slate-600 resize-none font-medium leading-relaxed"
+                    />
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex flex-col gap-2 mt-2">
+                    <button
+                      type="submit"
+                      disabled={isSubmittingRating}
+                      className="w-full py-3.5 bg-primary hover:bg-primary/90 text-white font-bold rounded-2xl shadow-lg hover:shadow-primary/20 transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isSubmittingRating ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Submitting...</span>
+                        </>
+                      ) : (
+                        <span>Submit Review</span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHasSkipped(true);
+                        setShowRatingModal(false);
+                      }}
+                      className="w-full py-3 hover:bg-slate-100 dark:hover:bg-slate-800/50 text-slate-500 dark:text-slate-400 font-bold rounded-2xl transition-colors cursor-pointer text-sm"
+                    >
+                      Skip for Now
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
     </div>
   );
 }
+

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { School, ArrowLeft, Eye, EyeOff, Loader2, Mail, Lock, User } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
-export default function Auth({ initialMode = 'login', setCurrentPage }) {
+export default function Auth({ initialMode = 'login', setCurrentPage, authError, setAuthError }) {
   const [isLogin, setIsLogin] = useState(initialMode === 'login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,7 +30,8 @@ export default function Auth({ initialMode = 'login', setCurrentPage }) {
     setRememberMe(false);
     setRole('student');
     setErrors({});
-  }, [initialMode]);
+    if (setAuthError) setAuthError(null);
+  }, [initialMode, setAuthError]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -53,6 +54,7 @@ export default function Auth({ initialMode = 'login', setCurrentPage }) {
 
     setErrors({});
     setIsSubmitting(true);
+    let targetPage = 'dashboard';
 
     try {
       if (isLogin) {
@@ -62,6 +64,41 @@ export default function Auth({ initialMode = 'login', setCurrentPage }) {
           password,
         });
         if (error) throw error;
+
+        // Fetch profile to verify instructor status
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+
+        if (profileError) throw profileError;
+
+        if (profile) {
+          if (profile.instructor_status === 'pending') {
+            await supabase.auth.signOut();
+            if (setAuthError) {
+              setAuthError('บัญชีผู้สอนของคุณกำลังรอการอนุมัติจากแอดมิน กรุณารอแอดมินอนุมัติก่อนเข้าสู่ระบบ');
+            }
+            setErrors({});
+            setIsSubmitting(false);
+            return;
+          } else if (profile.instructor_status === 'rejected') {
+            await supabase.auth.signOut();
+            if (setAuthError) {
+              setAuthError('บัญชีผู้สอนของคุณได้รับการปฏิเสธการอนุมัติ');
+            }
+            setErrors({});
+            setIsSubmitting(false);
+            return;
+          }
+
+          if (profile.role === 'instructor') {
+            targetPage = 'course-builder';
+          } else if (profile.role === 'admin') {
+            targetPage = 'admin';
+          }
+        }
       } else {
         // Sign Up
         const { data, error } = await supabase.auth.signUp({
@@ -75,10 +112,23 @@ export default function Auth({ initialMode = 'login', setCurrentPage }) {
           },
         });
         if (error) throw error;
+
+        // If registered as instructor, sign out immediately, show success message, switch to login page
+        if (role === 'instructor') {
+          await supabase.auth.signOut();
+          if (setAuthError) {
+            setAuthError('สมัครสมาชิกสำเร็จ! บัญชีผู้สอนของคุณกำลังรอการอนุมัติจากแอดมิน กรุณารอแอดมินอนุมัติก่อนเข้าสู่ระบบ');
+          }
+          setIsLogin(true);
+          setIsSubmitting(false);
+          setPassword('');
+          setConfirmPassword('');
+          return;
+        }
       }
 
       setIsSubmitting(false);
-      setCurrentPage('dashboard');
+      setCurrentPage(targetPage);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
       setIsSubmitting(false);
@@ -233,6 +283,12 @@ export default function Auth({ initialMode = 'login', setCurrentPage }) {
 
             {/* Form Submission */}
             <form onSubmit={handleSubmit} className="space-y-4">
+              
+              {authError && (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/25 rounded-xl text-[11px] text-amber-600 dark:text-amber-400 font-semibold text-center select-none mb-2">
+                  {authError}
+                </div>
+              )}
               
               {/* Role Toggle Selector (Sign Up Only) */}
               <AnimatePresence initial={false}>
@@ -463,7 +519,6 @@ export default function Auth({ initialMode = 'login', setCurrentPage }) {
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <button 
                   type="button" 
-                  onClick={handleSubmit}
                   className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#c7c4d8]/30 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 hover:bg-slate-50 dark:hover:bg-slate-800/60 py-2.5 font-semibold text-xs text-on-surface dark:text-slate-300 shadow-sm hover:shadow-md transition-all active:scale-[0.99] cursor-pointer"
                 >
                   <svg className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -476,7 +531,6 @@ export default function Auth({ initialMode = 'login', setCurrentPage }) {
                 </button>
                 <button 
                   type="button" 
-                  onClick={handleSubmit}
                   className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#c7c4d8]/30 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 hover:bg-slate-50 dark:hover:bg-slate-800/60 py-2.5 font-semibold text-xs text-on-surface dark:text-slate-300 shadow-sm hover:shadow-md transition-all active:scale-[0.99] cursor-pointer"
                 >
                   <svg className="h-4.5 w-4.5 text-on-surface dark:text-white" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -493,7 +547,10 @@ export default function Auth({ initialMode = 'login', setCurrentPage }) {
                 {isLogin ? "Don't have an account? " : "Already have an account? "}
                 <button
                   type="button"
-                  onClick={() => setIsLogin(!isLogin)}
+                  onClick={() => {
+                    setIsLogin(!isLogin);
+                    if (setAuthError) setAuthError(null);
+                  }}
                   className="font-bold text-primary dark:text-primary-fixed-dim hover:underline cursor-pointer"
                 >
                   {isLogin ? 'Sign up' : 'Log in'}

@@ -54,6 +54,7 @@ export default function Cart({ cartItems, removeFromCart, setCurrentPage, setSel
     }
     
     // Switch to checkout state
+    setSelectedCourseId(null);
     setCurrentPage('checkout');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };

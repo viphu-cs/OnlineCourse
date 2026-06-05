@@ -3,7 +3,7 @@ import { motion, useInView } from 'framer-motion';
 import { ArrowRight, Star, GraduationCap } from 'lucide-react';
 
 
-export default function Hero({ setCurrentPage }) {
+export default function Hero({ setCurrentPage, session, userProfile }) {
   const videoRef = useRef(null);
   const isInView = useInView(videoRef, { once: false, amount: 0.2 });
 
@@ -128,15 +128,31 @@ export default function Hero({ setCurrentPage }) {
               Explore Courses
               <ArrowRight className="w-4 h-4" />
             </motion.button>
-            
-            <motion.a 
-              whileHover={{ scale: 1.02, bg: 'rgba(255,255,255,0.05)' }}
-              whileTap={{ scale: 0.98 }}
-              href="#" 
-              className="inline-flex justify-center items-center gap-2 font-semibold text-[15px] md:text-sm bg-transparent text-on-surface dark:text-slate-200 border border-[#c7c4d8]/60 dark:border-white/10 min-h-[48px] md:min-h-0 py-3.5 px-8 rounded-full hover:bg-slate-100/50 dark:hover:bg-slate-800/40 transition-all duration-300 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none w-full sm:w-auto"
-            >
-              Become Instructor
-            </motion.a>
+                       {!session ? (
+              <motion.button 
+                whileHover={{ scale: 1.02, bg: 'rgba(255,255,255,0.05)' }}
+                whileTap={{ scale: 0.98 }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setCurrentPage('signup');
+                }}
+                className="inline-flex justify-center items-center gap-2 font-semibold text-[15px] md:text-sm bg-transparent text-on-surface dark:text-slate-200 border border-[#c7c4d8]/60 dark:border-white/10 min-h-[48px] md:min-h-0 py-3.5 px-8 rounded-full hover:bg-slate-100/50 dark:hover:bg-slate-800/40 transition-all duration-300 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none w-full sm:w-auto cursor-pointer"
+              >
+                Become Instructor
+              </motion.button>
+            ) : userProfile?.role === 'instructor' || userProfile?.role === 'admin' ? (
+              <motion.button 
+                whileHover={{ scale: 1.02, bg: 'rgba(255,255,255,0.05)' }}
+                whileTap={{ scale: 0.98 }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setCurrentPage('course-builder');
+                }}
+                className="inline-flex justify-center items-center gap-2 font-semibold text-[15px] md:text-sm bg-transparent text-on-surface dark:text-slate-200 border border-[#c7c4d8]/60 dark:border-white/10 min-h-[48px] md:min-h-0 py-3.5 px-8 rounded-full hover:bg-slate-100/50 dark:hover:bg-slate-800/40 transition-all duration-300 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none w-full sm:w-auto cursor-pointer"
+              >
+                Instructor Studio
+              </motion.button>
+            ) : null}
           </motion.div>
 
           {/* Ratings & Avatars */}

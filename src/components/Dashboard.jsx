@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
-  BookOpen, CheckCircle, Award, Clock, ArrowRight, Play, Flame, Download, Check, Loader2
+  BookOpen, CheckCircle, Award, Clock, ArrowRight, Play, Flame, Download, Check, Loader2, AlertCircle
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
@@ -271,7 +271,7 @@ export default function Dashboard({ setCurrentPage, setSelectedCourseId, user, u
   if (!user) {
     return (
       <div className="min-h-screen bg-[#f8f9ff] dark:bg-[#0b1c30] text-[#0b1c30] dark:text-[#f8f9ff] pt-32 pb-16 px-4 md:px-12 max-w-7xl mx-auto w-full flex flex-col items-center justify-center text-center">
-        <div className="bg-white dark:bg-slate-900 border border-[#c7c4d8]/40 dark:border-white/5 rounded-2xl p-8 max-w-md level-3-shadow flex flex-col items-center gap-6">
+        <div className="bg-white dark:bg-slate-900 border border-[#c7c4d8]/40 dark:border-white/5 rounded-2xl p-8 max-w-[440px] level-3-shadow flex flex-col items-center gap-6">
           <BookOpen className="w-16 h-16 text-primary animate-pulse" />
           <h1 className="font-display font-bold text-2xl text-on-surface dark:text-white">Track Your Progress</h1>
           <p className="text-sm text-on-surface-variant dark:text-slate-400 font-medium">

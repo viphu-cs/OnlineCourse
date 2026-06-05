@@ -14,6 +14,7 @@ import Dashboard from './components/Dashboard';
 import CourseBuilder from './components/CourseBuilder';
 import Cart from './components/Cart';
 import Auth from './components/Auth';
+import AdminPanel from './components/AdminPanel';
 import { getCourseById as staticGetCourseById, COURSES_DATA } from './data/coursesData';
 import { supabase } from './supabaseClient';
 
@@ -27,6 +28,7 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [enrolledCourseIds, setEnrolledCourseIds] = useState([]);
+  const [authError, setAuthError] = useState(null);
 
   // Fetch student enrollments
   const fetchEnrollments = async (userId) => {
@@ -46,19 +48,23 @@ export default function App() {
 
   // Sync auth state
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       if (session?.user) {
-        fetchUserProfile(session.user.id);
-        fetchEnrollments(session.user.id);
+        const profile = await fetchUserProfile(session.user.id);
+        if (profile) {
+          fetchEnrollments(session.user.id);
+        }
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       if (session?.user) {
-        fetchUserProfile(session.user.id);
-        fetchEnrollments(session.user.id);
+        const profile = await fetchUserProfile(session.user.id);
+        if (profile) {
+          fetchEnrollments(session.user.id);
+        }
       } else {
         setUserProfile(null);
         setEnrolledCourseIds([]);
@@ -79,11 +85,28 @@ export default function App() {
         .single();
       if (error) throw error;
       if (data) {
+        if (data.instructor_status === 'pending') {
+          setAuthError('บัญชีผู้สอนของคุณกำลังรอการอนุมัติจากแอดมิน กรุณารอแอดมินอนุมัติก่อนเข้าสู่ระบบ');
+          await supabase.auth.signOut();
+          setSession(null);
+          setUserProfile(null);
+          setCurrentPage('login');
+          return null;
+        } else if (data.instructor_status === 'rejected') {
+          setAuthError('บัญชีผู้สอนของคุณได้รับการปฏิเสธการอนุมัติ');
+          await supabase.auth.signOut();
+          setSession(null);
+          setUserProfile(null);
+          setCurrentPage('login');
+          return null;
+        }
         setUserProfile(data);
+        return data;
       }
     } catch (err) {
       console.error('Error fetching user profile:', err);
     }
+    return null;
   };
 
   const handleLogout = async () => {
@@ -179,6 +202,7 @@ export default function App() {
             authorRating: dbCourse.author_rating,
             authorStudents: dbCourse.author_students,
             tag: dbCourse.tag,
+            status: dbCourse.status,
             duration: dbCourse.duration,
             difficulty: dbCourse.difficulty,
             gradient: dbCourse.gradient,
@@ -218,8 +242,11 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Guard cart/checkout pages for instructors
+  // Guard cart/checkout pages for instructors, and admin page for non-admins
   const handleSetCurrentPage = (page) => {
+    if (page === 'admin' && userProfile?.role !== 'admin') {
+      return; // Block non-admins from admin panel
+    }
     if (isInstructor && (page === 'cart' || page === 'checkout')) {
       return; // Silently block navigation
     }
@@ -263,7 +290,11 @@ export default function App() {
         )}
         
         {/* Main Content Area */}
-        <main className={`flex-grow flex flex-col ${currentPage === 'login' || currentPage === 'signup' ? '' : 'pb-16'}`}>
+        <main className={`flex-grow flex flex-col ${
+          currentPage === 'login' || currentPage === 'signup' || currentPage === 'course-builder' || currentPage === 'learning-experience' 
+            ? '' 
+            : 'pb-16'
+        }`}>
           <AnimatePresence mode="wait">
             {currentPage === 'landing' ? (
               <motion.div
@@ -274,7 +305,11 @@ export default function App() {
                 transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                 className="flex flex-col"
               >
-                <Hero setCurrentPage={setCurrentPage} />
+                <Hero 
+                  setCurrentPage={setCurrentPage} 
+                  session={session}
+                  userProfile={userProfile}
+                />
                 <div className="flex flex-col gap-6 md:gap-10 pt-6 md:pt-10">
                   <Stats />
                   <BentoGrid 
@@ -343,6 +378,7 @@ export default function App() {
                   course={selectedCourseId ? getCourseById(selectedCourseId) : null} 
                   cartItems={cartItems}
                   clearCart={clearCart}
+                  removeFromCart={removeFromCart}
                   setCurrentPage={setCurrentPage} 
                   setSelectedCourseId={setSelectedCourseId}
                   user={session?.user}
@@ -408,7 +444,24 @@ export default function App() {
                 exit={{ opacity: 0, y: -15 }}
                 transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
               >
-                <Auth initialMode={currentPage} setCurrentPage={setCurrentPage} session={session} userProfile={userProfile} />
+                <Auth 
+                  initialMode={currentPage} 
+                  setCurrentPage={setCurrentPage} 
+                  session={session} 
+                  userProfile={userProfile} 
+                  authError={authError}
+                  setAuthError={setAuthError}
+                />
+              </motion.div>
+            ) : currentPage === 'admin' ? (
+              <motion.div
+                key="admin"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              >
+                <AdminPanel setCurrentPage={setCurrentPage} userProfile={userProfile} />
               </motion.div>
             ) : (
               <motion.div

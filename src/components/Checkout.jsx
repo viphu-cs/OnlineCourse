@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
-export default function Checkout({ course, cartItems = [], clearCart, setCurrentPage, setSelectedCourseId, user, userProfile, onCheckoutSuccess }) {
+export default function Checkout({ course, cartItems = [], clearCart, removeFromCart, setCurrentPage, setSelectedCourseId, user, userProfile, onCheckoutSuccess }) {
   const [purchasedItems, setPurchasedItems] = useState([]);
   const [paymentMethod, setPaymentMethod] = useState('card'); // 'card', 'promptpay', 'bank'
   const [billingCountry, setBillingCountry] = useState('US');
@@ -47,7 +47,7 @@ export default function Checkout({ course, cartItems = [], clearCart, setCurrent
 
   const isCartCheckout = !course;
 
-  if (!course && (!cartItems || cartItems.length === 0)) {
+  if (!isSuccess && !course && (!cartItems || cartItems.length === 0)) {
     return (
       <div className="pt-32 text-center select-none min-h-[60vh] flex flex-col items-center justify-center">
         <ShoppingBag className="w-12 h-12 text-slate-400 mx-auto mb-4 animate-bounce" />
@@ -63,9 +63,11 @@ export default function Checkout({ course, cartItems = [], clearCart, setCurrent
   }
 
   // Calculate pricing
-  const basePrice = isCartCheckout 
-    ? cartItems.reduce((acc, item) => acc + (item.priceVal || 0), 0)
-    : course.priceVal;
+  const basePrice = isSuccess
+    ? purchasedItems.reduce((acc, item) => acc + (item.priceVal || 0), 0)
+    : (isCartCheckout 
+        ? cartItems.reduce((acc, item) => acc + (item.priceVal || 0), 0)
+        : course.priceVal);
   const isFree = basePrice === 0;
 
   // Coupon calculations
@@ -206,7 +208,7 @@ export default function Checkout({ course, cartItems = [], clearCart, setCurrent
 
     try {
       const transactionId = `SE-${Math.floor(100000 + Math.random() * 900000)}`;
-      const initialStatus = (isFree || paymentMethod === 'card') ? 'verified' : 'pending';
+      const initialStatus = (isFree || paymentMethod === 'card' || paymentMethod === 'promptpay') ? 'verified' : 'pending';
       const itemsToBuy = isCartCheckout ? cartItems : [course];
 
       // Try to persist to Supabase, but don't block success on DB errors
@@ -249,11 +251,20 @@ export default function Checkout({ course, cartItems = [], clearCart, setCurrent
 
       // Always show success for card/free payments, pending notice for bank transfer
       setPurchasedItems(itemsToBuy);
-      if (isCartCheckout && clearCart) clearCart();
-      if (onCheckoutSuccess) onCheckoutSuccess();
-      localStorage.removeItem('skillelevate_applied_coupon');
       setIsSuccess(true);
+      localStorage.removeItem('skillelevate_applied_coupon');
       window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      // Defer clearing the cart and invoking success callbacks to ensure that
+      // the local success state renders first before the parent's cart state is emptied.
+      setTimeout(() => {
+        if (isCartCheckout) {
+          if (clearCart) clearCart();
+        } else {
+          if (course && removeFromCart) removeFromCart(course.id);
+        }
+        if (onCheckoutSuccess) onCheckoutSuccess();
+      }, 50);
 
     } catch (err) {
       console.error('Unexpected checkout error:', err);
